@@ -1,0 +1,26 @@
+# Build output
+build/
+app/build/
+.gradle/
+.kotlin/
+*.apk
+*.aab
+APKs/
+
+# Local machine and IDE
+local.properties
+.idea/
+*.iml
+.DS_Store
+.claude/
+
+# Keys and secrets: never commit
+*.jks
+*.keystore
+secrets.properties
+*-keys.json
+*.env
+
+# Native build cache
+.cxx/
+app/.cxx/

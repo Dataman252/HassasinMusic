@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seek bar styles</title>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Manrope:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--ground:#101117;--text:#ECEEF3;--muted:#A3A7B4;--amber:#FFB547;--indigo:#7C80FF}
+*{box-sizing:border-box}
+body{margin:0;background:#0a0b10;color:var(--text);font-family:Manrope,system-ui,sans-serif;padding:32px 16px}
+h1{font-family:Unbounded,sans-serif;font-size:28px;margin:0 0 6px}
+p.lead{color:var(--muted);margin:0 0 28px;max-width:860px;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:28px}
+.card{display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:15px;margin:0}
+.card .why{font-size:12px;color:var(--muted);line-height:1.45;margin:0}
+.phone{width:300px;height:600px;border-radius:34px;overflow:hidden;position:relative;background:radial-gradient(110% 55% at 50% 25%,#5a3a18 0%,#24170c 45%,#0d0b0a 80%);box-shadow:0 30px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.07);padding:18px 18px 16px;display:flex;flex-direction:column}
+.top{display:flex;justify-content:space-between;align-items:center}
+.dot{width:34px;height:34px;border-radius:17px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.14)}
+.pill{height:26px;padding:0 10px;border-radius:13px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.14);font-size:10px;display:flex;align-items:center;gap:6px}
+.pill i{width:6px;height:6px;border-radius:3px;background:#4ADE80;display:inline-block}
+.cover{margin:14px -18px 0;height:264px;background:linear-gradient(160deg,#e9b56b,#8a4e1c 55%,#2b1608);position:relative}
+.cover:after{content:"cover";position:absolute;left:12px;bottom:10px;font-size:10px;color:rgba(255,255,255,.7)}
+.name{margin-top:14px}
+.name b{display:block;font-family:Unbounded,sans-serif;font-size:18px}
+.name span{font-size:13px;color:rgba(255,255,255,.8)}
+.name small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.zone{position:relative;margin-top:auto;height:128px}
+.ctrls{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-around;z-index:2}
+.ctrls .s{width:40px;height:40px;border-radius:20px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12)}
+.ctrls .p{width:64px;height:64px;border-radius:32px;background:radial-gradient(circle at 50% 30%,#FFE0A8,#FFB547 45%,#E07B12);box-shadow:0 0 28px rgba(255,160,50,.5)}
+.times{position:absolute;left:0;right:0;bottom:-2px;display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,.7);z-index:3}
+.tools{display:flex;gap:6px;margin-top:12px}
+.tools div{flex:1;height:40px;border-radius:14px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1)}
+svg{display:block}
+.soft .phone{background:linear-gradient(180deg,#2e3036,#212327)}
+.legend{font-size:12px;color:var(--muted);margin-top:36px}
+.note{background:#151722;border:1px solid #262a3a;border-radius:16px;padding:16px 18px;margin:28px 0;max-width:980px;line-height:1.55;font-size:14px}
+.note b{color:var(--amber)}
+</style>
+</head>
+<body>
+<h1>Seek bar styles</h1>
+<p class="lead">Every option keeps the Poweramp-style layout: the timeline sits <b>behind</b> the play controls, and you tap or drag anywhere on it to seek. The cover now runs edge to edge (bigger). Pick a number. The app will also let you switch styles in Settings.</p>
+
+<div class="grid" id="grid"></div>
+
+<div class="note">
+<b>Soft look, deeper (shown in 8):</b> two-light shading (a light edge top-left, a dark edge bottom-right) on every control at twice today's strength; the cover sits in a deep pressed well with a raised rim; the toolbar becomes three separate raised keys; the seek groove is pressed into the surface and the played part glows indigo.<br><br>
+<b>Flowy theme:</b> I don't want to copy another app's design, and I'd rather not guess which parts you mean. Send 2–3 screenshots of the Flowy screens you love (player, visualizer, how it moves between screens). I'll design an original theme with the same feel: a live visualizer, its navigation style and player layout.
+</div>
+
+<script>
+const N=48;
+function bars(seed){const a=[];for(let i=0;i<N;i++){a.push(0.25+0.75*Math.abs(Math.sin(i*0.47+seed)*Math.cos(i*0.13+seed*0.3)));}return a;}
+const played=0.42;
+function frame(title,why,zone,opts={}){
+  return `<div class="card ${opts.soft?'soft':''}"><h2>${title}</h2><p class="why">${why}</p><div class="phone">
+  <div class="top"><div class="dot"></div><div class="pill"><i></i>Bit-perfect · 24/96 → D07</div><div class="dot"></div></div>
+  <div class="cover" style="${opts.soft?'margin:16px 0 0;height:240px;border-radius:24px;box-shadow:inset 6px 6px 14px rgba(0,0,0,.55),inset -6px -6px 14px rgba(255,255,255,.05);background:#1b1c20;display:flex;align-items:center;justify-content:center':''}">${opts.soft?'<div style="width:200px;height:200px;border-radius:18px;background:linear-gradient(160deg,#e9b56b,#8a4e1c 55%,#2b1608);box-shadow:-8px -8px 18px rgba(255,255,255,.06),10px 10px 22px rgba(0,0,0,.6)"></div>':''}</div>
+  <div class="name"><b>Humnava</b><span>Papon</span><small>Hamari Adhuri Kahani · FLAC 24/44.1</small></div>
+  <div class="zone">${zone}<div class="ctrls"><div class="s" style="${opts.soft?'background:#2a2c31;box-shadow:-4px -4px 10px rgba(255,255,255,.06),5px 5px 12px rgba(0,0,0,.6);border:none':''}"></div><div class="p" style="${opts.soft?'background:radial-gradient(circle at 50% 30%,#9ea1ff,#5458e0 55%,#3a3da8);box-shadow:0 0 26px rgba(124,128,255,.55),-5px -5px 12px rgba(255,255,255,.05),6px 6px 14px rgba(0,0,0,.6)':''}"></div><div class="s" style="${opts.soft?'background:#2a2c31;box-shadow:-4px -4px 10px rgba(255,255,255,.06),5px 5px 12px rgba(0,0,0,.6);border:none':''}"></div></div><div class="times"><span>2:16</span><span>-3:12</span></div></div>
+  <div class="tools">${opts.soft?'<div style="background:#2a2c31;border:none;box-shadow:-4px -4px 10px rgba(255,255,255,.05),5px 5px 12px rgba(0,0,0,.55)"></div>'.repeat(3):'<div></div><div></div><div></div>'}</div>
+  </div></div>`;
+}
+const W=264,H=118;
+function waveBehind(color,dim){const b=bars(1.3);const w=W/N;let s='';b.forEach((v,i)=>{const h=v*H*0.9;s+=`<rect x="${i*w+1}" y="${(H-h)/2}" width="${w-2}" height="${h}" rx="${(w-2)/2}" fill="${i/N<played?color:dim}"/>`});return `<svg width="${W}" height="${H}" style="position:absolute;left:0;top:0;opacity:.9">${s}</svg>`;}
+function mirrored(){const b=bars(2.1);const w=W/N;let s='';b.forEach((v,i)=>{const h=v*H*0.42;const c=i/N<played?'#FFB547':'rgba(255,255,255,.16)';s+=`<rect x="${i*w+1}" y="${H/2-h}" width="${w-2}" height="${h}" rx="1.5" fill="${c}"/><rect x="${i*w+1}" y="${H/2+2}" width="${w-2}" height="${h*0.6}" rx="1.5" fill="${c}" opacity=".45"/>`});return `<svg width="${W}" height="${H}" style="position:absolute;left:0;top:0">${s}</svg>`;}
+function line(){return `<svg width="${W}" height="${H}" style="position:absolute;left:0;top:0"><rect x="0" y="${H-22}" width="${W}" height="4" rx="2" fill="rgba(255,255,255,.18)"/><rect x="0" y="${H-22}" width="${W*played}" height="4" rx="2" fill="#FFB547"/><circle cx="${W*played}" cy="${H-20}" r="8" fill="#FFE0A8" style="filter:drop-shadow(0 0 6px #FFB547)"/></svg>`;}
+function capsule(){return `<div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:92px;border-radius:46px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);overflow:hidden"><div style="height:100%;width:${played*100}%;background:linear-gradient(90deg,rgba(255,181,71,.15),rgba(255,181,71,.55))"></div></div>`;}
+function ring(){const r=46,c=2*Math.PI*r;return `<svg width="${W}" height="${H}" style="position:absolute;left:0;top:0"><circle cx="${W/2}" cy="${H/2}" r="${r}" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="6"/><circle cx="${W/2}" cy="${H/2}" r="${r}" fill="none" stroke="#FFB547" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c*played} ${c}" transform="rotate(-90 ${W/2} ${H/2})" style="filter:drop-shadow(0 0 5px #FFB547)"/></svg>`;}
+function dots(){const b=bars(0.7);const w=W/N;let s='';b.forEach((v,i)=>{const n=Math.round(v*9);for(let k=0;k<n;k++){s+=`<circle cx="${i*w+w/2}" cy="${H-8-k*11}" r="2.2" fill="${i/N<played?'#FFB547':'rgba(255,255,255,.18)'}"/>`}});return `<svg width="${W}" height="${H}" style="position:absolute;left:0;top:0">${s}</svg>`;}
+function squiggle(){let d='M0 '+(H-22);const px=W*played;for(let x=0;x<=px;x+=2){d+=` L${x} ${(H-22)+Math.sin(x/6)*4}`;}return `<svg width="${W}" height="${H}" style="position:absolute;left:0;top:0"><path d="${d}" fill="none" stroke="#FFB547" stroke-width="3" stroke-linecap="round"/><rect x="${px+6}" y="${H-23.5}" width="${W-px-6}" height="3" rx="1.5" fill="rgba(255,255,255,.2)"/><rect x="${px-2}" y="${H-32}" width="4" height="20" rx="2" fill="#FFE0A8"/></svg>`;}
+const g=document.getElementById('grid');
+g.innerHTML=
+ frame('1 · Waveform behind controls','Poweramp style: the song\'s real loudness shape fills the area behind the buttons; played part in the accent colour.',waveBehind('rgba(255,181,71,.85)','rgba(255,255,255,.14)'))+
+ frame('2 · Mirrored waveform','The shape reflected below a centre line, like a sound file in an editor. Calm and very readable.',mirrored())+
+ frame('3 · Thin line + glowing knob','Classic and minimal: a thin line under the controls with a glowing handle.',line())+
+ frame('4 · Wide capsule','A big soft capsule that fills from the left behind the buttons. Easy to grab with a thumb.',capsule())+
+ frame('5 · Ring around play','Progress as a glowing ring around the play button; drag around the ring to seek.',ring())+
+ frame('6 · Dot spectrum','The loudness shape drawn as stacked dots: lighter, more "hi-fi meter".',dots())+
+ frame('7 · Wavy line','A gently waving line for the played part (moves while playing), flat line ahead.',squiggle())+
+ frame('8 · Soft look, deeper + waveform behind','Stronger two-light shading, the cover in a pressed well with a raised edge, separate raised keys, glowing indigo.',waveBehind('rgba(124,128,255,.85)','rgba(255,255,255,.10)'),{soft:true});
+</script>
+</body>
+</html>
