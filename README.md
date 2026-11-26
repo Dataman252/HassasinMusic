@@ -11,11 +11,11 @@ Get the latest APK from [Releases](../../releases). Android 9 or newer.
 ## Features
 
 **Output** (pick one on the Output tab)
-- **Rich tuned** (default): the phone's own decoder and sound tuning.
-- **Hi-Res**: 24-bit files go to Android as 32-bit float instead of being cut to 16-bit.
-- **Phone DSP**: offload, where the phone's audio chip decodes the file (saves battery).
-- **USB Direct**: bit-perfect to a USB DAC.
-- The quality details show which decoder runs, what Android receives, any resampling and the output device.
+- **Phone** (default): Android's normal output with the phone's own sound tuning.
+- **Hi-Res**: 24-bit songs reach Android at full depth (effects off).
+- **Battery saver**: the phone's audio chip decodes the file itself (MP3/AAC on most phones).
+- **USB DAC**: bit-perfect straight to a USB DAC.
+- Each option shows what it can do on your phone. The quality details show the decoder, what Android receives, any resampling and the output device.
 
 **Sound**
 - The phone's volume keys control the DAC's own volume in USB Direct.

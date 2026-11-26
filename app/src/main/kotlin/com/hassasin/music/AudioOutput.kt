@@ -16,28 +16,61 @@ data class OutputMode(val key: String, val title: String, val line: String, val 
 object Outputs {
     val ALL = listOf(
         OutputMode(
-            "tuned", "Rich tuned (phone)",
-            "The phone's own decoder and sound tuning: Android's mixer plus the phone maker's enhancements (Hi-Fi, Dolby, etc.). Works everywhere: speaker, wired, Bluetooth, USB.",
-            effects = true, tags = listOf("Default", "Phone tuning", "App effects"),
+            "tuned", "Phone",
+            "Android's normal output, with your phone's own sound tuning. Works on speaker, wired, Bluetooth and USB.",
+            effects = true, tags = listOf("Default", "App effects"),
         ),
         OutputMode(
-            "hires", "Hi-Res (32-bit float)",
-            "24-bit and higher files go to Android in 32-bit float at their own rate, so nothing is cut to 16-bit. The phone's mixer and tuning still apply. While app effects are on, this works like Rich tuned.",
-            effects = true, tags = listOf("Full bit depth", "Phone tuning"),
+            "hires", "Hi-Res",
+            "Keeps 24-bit songs at full depth on their way to Android (when app effects are off).",
+            effects = true, tags = listOf("24-bit"),
         ),
         OutputMode(
-            "offload", "Phone DSP (offload)",
-            "The compressed file goes straight to the phone's audio chip, which decodes and plays it. Lowest battery use. App effects and the visualizer are off; the phone's own tuning still applies.",
-            effects = false, tags = listOf("Hardware decoder", "Battery saver"),
+            "offload", "Battery saver",
+            "Your phone's audio chip plays the file itself. App effects pause.",
+            effects = false, tags = listOf("Lowest battery"),
         ),
         OutputMode(
-            "usb", "USB Direct (bit-perfect)",
-            "Straight to your USB DAC at each song's own rate and bit depth, skipping Android's mixer and the phone's tuning. With app effects off, the DAC gets the file's exact samples. Without a DAC, plays as Rich tuned.",
-            effects = true, tags = listOf("Bit-perfect", "DAC volume"),
+            "usb", "USB DAC",
+            "The exact file goes straight to your USB DAC, skipping Android.",
+            effects = true, tags = listOf("Bit-perfect"),
         ),
     )
 
     fun of(key: String): OutputMode = ALL.firstOrNull { it.key == key } ?: ALL.first()
+
+    /** Codecs the phone's audio chip can decode itself (offload), checked with Android. */
+    fun offloadCodecs(context: Context): List<String> {
+        if (android.os.Build.VERSION.SDK_INT < 31) return emptyList()
+        val attrs = android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build()
+        val codecs = mutableListOf("MP3" to AudioFormat.ENCODING_MP3, "AAC" to AudioFormat.ENCODING_AAC_LC, "Opus" to AudioFormat.ENCODING_OPUS)
+        if (android.os.Build.VERSION.SDK_INT >= 33) codecs += "FLAC" to 29 // AudioFormat.ENCODING_FLAC (hidden constant before API 35)
+        return codecs.filter { (_, enc) ->
+            runCatching {
+                val f = AudioFormat.Builder().setEncoding(enc).setSampleRate(44100).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build()
+                AudioManager.getPlaybackOffloadSupport(f, attrs) != AudioManager.PLAYBACK_OFFLOAD_NOT_SUPPORTED
+            }.getOrDefault(false)
+        }.map { it.first }
+    }
+
+    /** What each option can really do on this phone, shown under it. */
+    fun onThisPhone(context: Context, key: String, st: PlayState): String {
+        val mixer = AudioPathInfo.mixerRate(context).takeIf { it > 0 }?.let { "${khz(it)} kHz" } ?: "a fixed rate"
+        return when (key) {
+            "tuned" -> "On this phone: everything is mixed at $mixer."
+            "hires" -> "On this phone: the mixer runs at $mixer, so you may hear little or no difference."
+            "offload" -> offloadCodecs(context).let { c ->
+                if (c.isEmpty()) "On this phone: not available; plays as Phone."
+                else "On this phone: works for ${c.joinToString(" and ")} files. Other files (like FLAC) play as Phone."
+            }
+            "usb" -> when {
+                st.usb -> "Now: playing on ${st.dacName.ifBlank { "your DAC" }}."
+                st.dacPresent && !st.dacAllowed -> "DAC plugged in: allow access when Android asks."
+                else -> "No DAC plugged in: plays as Phone until you plug one in."
+            }
+            else -> ""
+        }
+    }
 }
 
 /** What the decoder and output are doing right now (for the quality details). */
@@ -83,6 +116,11 @@ object AudioPathInfo {
     /** Android's mixer rate (what everything is resampled to on the normal path). */
     fun mixerRate(context: Context): Int =
         (context.getSystemService(Context.AUDIO_SERVICE) as AudioManager).getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 0
+
+    /** Short device name for the sound-path pill: Speaker, Bluetooth, Wired, USB. */
+    fun deviceShort(context: Context): String = device(context).substringBefore(" · ").let {
+        when (it) { "Phone speaker", "Phone" -> "Speaker"; "Wired headphones", "Wired headset" -> "Wired"; "Bluetooth LE" -> "Bluetooth"; else -> it }
+    }
 
     /** Where Android is sending media right now (best guess from what is connected). */
     fun device(context: Context): String {

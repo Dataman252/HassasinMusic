@@ -59,7 +59,7 @@ private class MusicRenderersFactory(context: Context) : DefaultRenderersFactory(
     }
 
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink {
-        // Rich tuned / offload: 16-bit with the app's effects. Hi-Res: 32-bit float for hi-res files.
+        // Phone / Battery saver: 16-bit with the app's effects. Hi-Res: 32-bit float for hi-res files.
         val tuned = DefaultAudioSink.Builder(context)
             .setAudioProcessors(arrayOf(SoundEngine(forUsb = false)))
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)

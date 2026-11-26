@@ -95,7 +95,7 @@ fun OutputScreen(nav: Nav, sheet: Boolean = false) {
                     when {
                         st.usb && st.untouched -> StatusDot("Bit-perfect")
                         st.usb -> StatusDot("32-bit effects", C.Amber, C.AmberText)
-                        else -> StatusDot("Android", C.TextLow, C.TextMid)
+                        else -> StatusDot("Phone", C.TextLow, C.TextMid)
                     }
                 }
             }
@@ -490,6 +490,10 @@ private fun OutputChoice(m: OutputMode, on: Boolean, onPick: () -> Unit) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(m.title, style = body(15.sp, FontWeight.Bold, if (on) C.AmberText else C.TextHi))
             Text(m.line, style = body(12.sp, color = C.TextMid).copy(lineHeight = 17.sp))
+            val ctx = LocalContext.current
+            val st by Playback.state.collectAsState()
+            val here = remember(m.key, st.usb, st.dacPresent, st.dacAllowed) { Outputs.onThisPhone(ctx, m.key, st) }
+            if (here.isNotBlank()) Text(here, style = body(12.sp, FontWeight.SemiBold, if (on) C.AmberText else C.TextHi.copy(alpha = 0.8f)).copy(lineHeight = 17.sp))
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 (m.tags + if (!m.effects) listOf("No app effects") else emptyList()).forEach { tag ->
                     Text(

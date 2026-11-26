@@ -543,7 +543,12 @@ fun QualityLine(t: Track) {
             val mode = Outputs.of(s.output)
             val (decKind, decLine) = AudioPathInfo.decoderLine(path, st.usb)
             Text("DECODING & OUTPUT", style = eyebrow(), modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 2.dp))
-            DetailRow("Mode", if (st.usb) "USB Direct (bit-perfect)" else if (s.output == "usb") "Rich tuned (no DAC with access)" else mode.title)
+            DetailRow("Mode", when {
+                st.usb -> if (st.untouched) "USB DAC, bit-perfect" else "USB DAC, with effects"
+                s.output == "usb" -> "Phone (no DAC plugged in)"
+                s.output == "offload" && !path.offload -> "Phone (Battery saver doesn't take this file type)"
+                else -> mode.title
+            })
             DetailRow("Decoder", "$decKind\n$decLine")
             if (st.usb) {
                 DetailRow("Sent as", "${khz(st.dacRate)} kHz ${if (st.untouched) "untouched samples" else "32-bit, after the app's effects"}")

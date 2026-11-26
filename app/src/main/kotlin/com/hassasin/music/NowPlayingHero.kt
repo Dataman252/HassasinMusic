@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -247,13 +248,17 @@ fun SignalPill(st: PlayState, s: AppSettings, compact: Boolean = false, onClick:
 /** The signal path as a small tag beside the artist: "● Bit-perfect → D07 384k", "● Android · DSP → Phone". */
 @Composable
 private fun CompactSignal(st: PlayState, s: AppSettings, onClick: () -> Unit) {
-    val effects = Eq.anyEffect(s.sound, st.usb)
-    val (dot, label) = when {
-        st.usb && st.untouched -> C.Ok to "Bit-perfect"
-        st.usb -> C.Amber to "32-bit DSP"
-        else -> Color.White.copy(alpha = 0.55f) to if (effects) "Android · DSP" else "Android"
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val path by AudioPathInfo.path.collectAsState()
+    val effects = Eq.anyEffect(s.sound, st.usb) && !(s.output == "offload" && !st.usb)
+    val label = when {
+        st.usb -> if (st.untouched) "Bit-perfect" else "USB DAC + effects"
+        s.output == "offload" && path.offload -> "Battery saver"
+        s.output == "hires" && !effects -> "Hi-Res"
+        else -> if (effects) "Phone + effects" else "Phone"
     }
-    val dest = if (st.usb) "${st.dacName.ifBlank { "DAC" }.split(' ').last()} ${khz(st.dacRate)}k" else "Phone"
+    val dot = when { st.usb && st.untouched -> C.Ok; effects -> C.Amber; else -> Color.White.copy(alpha = 0.55f) }
+    val dest = if (st.usb) "${st.dacName.ifBlank { "DAC" }.split(' ').last()} ${khz(st.dacRate)}k" else remember(path.updatedAt, st.current?.id) { AudioPathInfo.deviceShort(context) }
     val shape = RoundedCornerShape(999.dp)
     Row(
         Modifier.height(24.dp)
@@ -261,7 +266,7 @@ private fun CompactSignal(st: PlayState, s: AppSettings, onClick: () -> Unit) {
             .clip(shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 9.dp)
-            .semantics { contentDescription = "Sound path: $label to $dest. Tap for output settings" },
+            .semantics { contentDescription = "Output: $label to $dest. Tap to change" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(6.dp).shadow(4.dp, CircleShape, ambientColor = dot, spotColor = dot).background(dot, CircleShape))

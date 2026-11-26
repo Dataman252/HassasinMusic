@@ -250,7 +250,8 @@ class SoundEngine(private val forUsb: Boolean) : BaseAudioProcessor() {
     private var env = 1.0
     private var rand = 12345L
 
-    fun wantsActive(): Boolean = Eq.anyEffect(SoundState.settings, forUsb)
+    // Offload hands the compressed file to the phone's chip, so the app cannot process it: effects pause there.
+    fun wantsActive(): Boolean = Eq.anyEffect(SoundState.settings, forUsb) && (forUsb || AppState.settings.value.output != "offload")
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (!wantsActive()) return AudioProcessor.AudioFormat.NOT_SET
