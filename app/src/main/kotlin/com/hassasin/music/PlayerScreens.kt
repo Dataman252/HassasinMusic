@@ -90,12 +90,6 @@ fun PlayerScreen(nav: Nav) {
         ImmersiveBackground(art, glow)
         Visualizer(settings.vizStyle, C.Amber.copy(alpha = 0.55f), Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(150.dp))
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 14.dp)) {
-            // 1. Where you are: library, how the sound travels, more.
-            Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                GlassCircle(I.Down, "Library") { nav.tab(Route.Home) }
-                Spacer(Modifier.weight(1f))
-                MoreMenu(nav, t, album, settings)
-            }
             if (t == null) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text("Pick a song in your library to start.", style = body(15.sp, color = C.TextMid))
@@ -115,12 +109,8 @@ fun PlayerScreen(nav: Nav) {
                     }
                 }
             }
-            // 3. What is playing: title, artist, album · year · format, and the rating.
-            androidx.compose.animation.AnimatedContent(
-                targetState = t,
-                transitionSpec = { (fadeIn(tween(260)) + slideInVertically(tween(300)) { it / 4 }) togetherWith fadeOut(tween(150)) },
-                label = "song name",
-            ) { song -> SongName(song, stats[song.id]?.rating ?: 0, st, settings) { nav.go(Route.Sound(5)) } }
+            // 3. What is playing, centred, with Library and More within thumb reach on either side.
+            SongName(nav, t, album, stats[t.id]?.rating ?: 0, st, settings, flow = false)
             Spacer(Modifier.height(14.dp))
             // 4 + 5. The seek bar behind the play controls (style chosen in Settings).
             val peaks by produceState<FloatArray?>(null, t.id) { value = Waveform.peaks(context, t) }
@@ -198,46 +188,65 @@ internal fun SoftDisc(bmp: android.graphics.Bitmap?, side: androidx.compose.ui.u
     }
 }
 
-/** Title, artist and album · year · format, with the rating to the right. */
+/**
+ * The song, centred: Library (left) and More (right) sit beside the title where the thumb reaches;
+ * under it the sound path and the quality strip.
+ */
 @Composable
-private fun SongName(t: Track, rating: Int, st: PlayState, settings: AppSettings, onPath: () -> Unit) {
-    var rate by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.Top) {
-        Column(Modifier.weight(1f)) {
-            Text(ArtRepo.cleanSongTitle(t.title).ifBlank { t.title }, style = display(22.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(3.dp))
-            ArtistWithPath(t, st, settings, body(15.sp, FontWeight.SemiBold, if (t.artist.isBlank()) C.TextLow else C.TextHi.copy(alpha = 0.85f)), onPath)
-            val meta = listOf(t.album.takeIf { it.isNotBlank() }, t.year.takeIf { it > 0 }?.toString()).filterNotNull()
-            if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = body(12.sp, color = C.TextMid), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            QualityLine(t)
-        }
-        Box {
-            Box(
-                Modifier.size(44.dp).clip(CircleShape).clickable { rate = true }.semantics { contentDescription = if (rating > 0) "Rated $rating stars. Change rating" else "Rate this song" },
+private fun SongName(nav: Nav, t: Track, album: Album?, rating: Int, st: PlayState, settings: AppSettings, flow: Boolean) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            GlassCircle(I.Down, "Library") { nav.tab(Route.Home) }
+            androidx.compose.animation.AnimatedContent(
+                targetState = t,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                transitionSpec = { (fadeIn(tween(260)) + slideInVertically(tween(300)) { it / 4 }) togetherWith fadeOut(tween(150)) },
                 contentAlignment = Alignment.Center,
-            ) { Ico(I.Star, if (rating > 0) C.Amber else C.TextMid, 22.dp, filled = rating > 0) }
-            DropdownMenu(rate, { rate = false }, containerColor = if (Look.soft) Color(0xFF2B2D32) else Color(0xFF171925)) {
-                Row(Modifier.padding(horizontal = 8.dp)) {
-                    (1..5).forEach { n ->
-                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { AppState.rate(t, if (rating == n) 0 else n); rate = false }.semantics { contentDescription = "$n stars" }, contentAlignment = Alignment.Center) {
-                            Ico(I.Star, if (n <= rating) C.Amber else C.TextMid, 22.dp, filled = n <= rating)
-                        }
-                    }
+                label = "song name",
+            ) { song ->
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    val title = ArtRepo.cleanSongTitle(song.title).ifBlank { song.title }
+                    Text(
+                        if (flow) title.uppercase() else title,
+                        style = if (flow) display(26.sp).copy(lineHeight = 30.sp, letterSpacing = 0.sp) else display(22.sp),
+                        maxLines = if (flow) 2 else 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        song.artist.ifBlank { "Unknown artist" },
+                        style = body(if (flow) 16.sp else 15.sp, FontWeight.SemiBold, if (song.artist.isBlank()) C.TextLow else Color.White.copy(alpha = 0.88f)),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    )
+                    val meta = listOf(song.album.takeIf { it.isNotBlank() }, song.year.takeIf { it > 0 }?.toString()).filterNotNull()
+                    if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = body(12.sp, color = C.TextMid), maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                 }
             }
+            MoreMenu(nav, t, album, settings, rating)
         }
+        // The sound path, then the quality strip, centred under the name.
+        Box(Modifier.padding(top = 8.dp)) { SignalPill(st, settings, compact = true) { nav.go(Route.Sound(5)) } }
+        QualityLine(t)
     }
 }
 
 /** Less-used actions for the song, kept out of the way. */
 @Composable
-private fun MoreMenu(nav: Nav, t: Track?, album: Album?, s: AppSettings) {
+private fun MoreMenu(nav: Nav, t: Track?, album: Album?, s: AppSettings, rating: Int = 0) {
     var open by remember { mutableStateOf(false) }
     Box {
         GlassCircle(I.More, "More") { open = true }
         DropdownMenu(open, { open = false }, containerColor = if (Look.soft) Color(0xFF2B2D32) else Color(0xFF171925)) {
             fun item(label: String, go: () -> Unit) = @Composable { DropdownMenuItem(text = { Text(label, style = body(14.sp)) }, onClick = { open = false; go() }) }
             if (t != null) {
+                Text("RATE", style = eyebrow(), modifier = Modifier.padding(start = 16.dp, top = 6.dp))
+                Row(Modifier.padding(horizontal = 8.dp)) {
+                    (1..5).forEach { n ->
+                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { AppState.rate(t, if (rating == n) 0 else n) }.semantics { contentDescription = "$n stars" }, contentAlignment = Alignment.Center) {
+                            Ico(I.Star, if (n <= rating) C.Amber else C.TextMid, 22.dp, filled = n <= rating)
+                        }
+                    }
+                }
+                androidx.compose.material3.HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                 item("Go to album") { nav.go(Route.AlbumDetail(t.albumKey)) }()
                 if (t.artist.isNotBlank()) item("Go to artist") { LyricsRepo.mainArtist(t.artist).let { a -> nav.go(Route.Tracks(a, "artist", a)) } }()
                 item("Change the picture") { nav.go(Route.FixArt(album?.key ?: t.albumKey)) }()
@@ -456,6 +465,14 @@ fun QueueScreen(nav: Nav, sheet: Boolean = false) {
 }
 
 
+@Composable
+private fun DetailRow(k: String, v: String) {
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).width(310.dp)) {
+        Text(k, style = body(12.sp, color = C.TextMid), modifier = Modifier.width(100.dp))
+        Text(v, style = body(13.sp, FontWeight.SemiBold).copy(lineHeight = 18.sp))
+    }
+}
+
 /** The artist, with the sound path as a small tag beside it. */
 @Composable
 private fun ArtistWithPath(t: Track, st: PlayState, settings: AppSettings, style: androidx.compose.ui.text.TextStyle, onPath: () -> Unit) {
@@ -504,7 +521,7 @@ fun QualityLine(t: Track) {
         DropdownMenu(
             open, { open = false },
             shape = RoundedCornerShape(22.dp),
-            containerColor = if (Look.soft) Color(0xE62B2D32) else Color(0xB3101119),
+            containerColor = if (Look.soft) Color(0xE62B2D32) else Color(0xEB101119),
             tonalElevation = 0.dp, shadowElevation = 18.dp,
             border = androidx.compose.foundation.BorderStroke(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f)))),
         ) {
@@ -518,12 +535,26 @@ fun QualityLine(t: Track) {
                 "Channels" to when (info.channels) { 1 -> "Mono"; 2 -> "Stereo"; else -> "${info.channels} channels" },
                 "Bitrate" to if (info.kbps > 0) "%,d kbps".format(java.util.Locale.US, info.kbps) else "Unknown",
                 "File" to "%.1f MB · .%s".format(java.util.Locale.US, info.sizeMb, info.container.lowercase()),
-                "Output" to if (st.usb) "USB Direct to ${st.dacName.ifBlank { "DAC" }} at ${khz(st.dacRate)} kHz${if (st.untouched) ", bit-perfect" else ", 32-bit effects"}" else "Android output (phone mixer)",
-            ).forEach { (k, v) ->
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).width(300.dp)) {
-                    Text(k, style = body(12.sp, color = C.TextMid), modifier = Modifier.width(96.dp))
-                    Text(v, style = body(13.sp, FontWeight.SemiBold))
-                }
+            ).forEach { (k, v) -> DetailRow(k, v) }
+            // How it is decoded and where it goes.
+            val ctx = LocalContext.current
+            val path by AudioPathInfo.path.collectAsState()
+            val s = AppState.settings.value
+            val mode = Outputs.of(s.output)
+            val (decKind, decLine) = AudioPathInfo.decoderLine(path, st.usb)
+            Text("DECODING & OUTPUT", style = eyebrow(), modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 2.dp))
+            DetailRow("Mode", if (st.usb) "USB Direct (bit-perfect)" else if (s.output == "usb") "Rich tuned (no DAC with access)" else mode.title)
+            DetailRow("Decoder", "$decKind\n$decLine")
+            if (st.usb) {
+                DetailRow("Sent as", "${khz(st.dacRate)} kHz ${if (st.untouched) "untouched samples" else "32-bit, after the app's effects"}")
+                DetailRow("Plays on", "${st.dacName.ifBlank { "USB DAC" }} directly, skipping Android's mixer and the phone's tuning")
+            } else {
+                val mixer = AudioPathInfo.mixerRate(ctx)
+                DetailRow("Sent as", if (path.offload) "Compressed file to the audio chip" else "${AudioPathInfo.encodingName(path.trackEncoding)}${if (path.trackRate > 0) " · ${khz(path.trackRate)} kHz" else ""}")
+                if (!path.offload && mixer > 0) DetailRow("Android mixer", if (path.trackRate > 0 && path.trackRate != mixer) "Resampled to ${khz(mixer)} kHz, then the phone's tuning" else "${khz(mixer)} kHz, then the phone's tuning")
+                DetailRow("Plays on", AudioPathInfo.device(ctx))
+                val effects = Eq.anyEffect(s.sound, false)
+                DetailRow("App effects", when { path.offload -> "Off (offload)"; effects -> "On"; else -> "Off" })
             }
         }
     }
@@ -584,26 +615,11 @@ private fun FlowPlayer(nav: Nav, t: Track, st: PlayState, settings: AppSettings,
                         @Suppress("UNUSED_EXPRESSION") isCurrent
                     }
                 }
-                Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    GlassCircle(I.Down, "Library") { nav.tab(Route.Home) }
-                    Spacer(Modifier.weight(1f))
-                    MoreMenu(nav, t, albumOf(t), settings)
-                }
-                Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 22.dp)) {
-                    androidx.compose.animation.AnimatedContent(
-                        targetState = t,
-                        transitionSpec = { (fadeIn(tween(260)) + slideInVertically(tween(320)) { it / 3 }) togetherWith fadeOut(tween(150)) },
-                        label = "flow title",
-                    ) { song ->
-                        Column {
-                            Text(ArtRepo.cleanSongTitle(song.title).ifBlank { song.title }.uppercase(), style = display(30.sp).copy(lineHeight = 34.sp, letterSpacing = 0.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(4.dp))
-                            ArtistWithPath(song, st, settings, body(17.sp, FontWeight.SemiBold, Color.White.copy(alpha = 0.92f))) { nav.go(Route.Sound(5)) }
-                            if (song.album.isNotBlank()) Text(song.album, style = body(13.sp, color = Color.White.copy(alpha = 0.7f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    QualityLine(t)
-                }
+                // A soft shade under the status bar so the clock and icons stay readable on any cover.
+                Box(Modifier.fillMaxWidth().height(110.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent))))
+            }
+            Column(Modifier.padding(horizontal = 14.dp)) {
+                SongName(nav, t, albumOf(t), rating, st, settings, flow = true)
             }
             Column(Modifier.padding(horizontal = 18.dp)) {
                 val peaks by produceState<FloatArray?>(null, t.id) { value = Waveform.peaks(context, t) }

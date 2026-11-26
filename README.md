@@ -10,8 +10,15 @@ Get the latest APK from [Releases](../../releases). Android 9 or newer.
 
 ## Features
 
+**Output** (pick one on the Output tab)
+- **Rich tuned** (default): the phone's own decoder and sound tuning.
+- **Hi-Res**: 24-bit files go to Android as 32-bit float instead of being cut to 16-bit.
+- **Phone DSP**: offload, where the phone's audio chip decodes the file (saves battery).
+- **USB Direct**: bit-perfect to a USB DAC.
+- The quality details show which decoder runs, what Android receives, any resampling and the output device.
+
 **Sound**
-- **USB Direct**: plays straight to a USB DAC, bypassing Android's mixer. With every effect off, the output is bit-perfect. The DAC's own volume is controlled by the phone's volume keys.
+- The phone's volume keys control the DAC's own volume in USB Direct.
 - Calls work with the DAC plugged in: the player hands the DAC back to Android during a call and takes it back afterwards.
 - 10-band EQ with presets and parametric filters, bass styles (sub rumble, 808, punchy and more), and tone controls.
 - Earphone corrections from the AutoEq database.
@@ -34,6 +41,10 @@ Get the latest APK from [Releases](../../releases). Android 9 or newer.
 - Swipe the cover to change song.
 - Lock-screen player in your chosen look. Notification controls show the cover and include shuffle and repeat.
 
+## Updates and support
+
+The app checks this repository's releases and offers each new version in-app; Android asks before installing it. If you enjoy the app, there's an optional UPI coffee link in Settings.
+
 ## Build
 
 Needs Android Studio (for its JDK) and the Android SDK with NDK.
@@ -54,3 +65,7 @@ Needs Android Studio (for its JDK) and the Android SDK with NDK.
 - Fonts: Unbounded, Manrope and JetBrains Mono (SIL OFL).
 
 Poweramp, ViPER4Android, HiBy MSEB, Flowie and NYX inspired some of the features. All code and design here are original, and product names belong to their owners.
+
+## Licence
+
+GPL-3.0: see [LICENSE](LICENSE). The app bundles the Jellyfin FFmpeg decoder, which is GPL-3.0.

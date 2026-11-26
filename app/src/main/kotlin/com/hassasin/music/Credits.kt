@@ -80,7 +80,9 @@ fun CreditsScreen(nav: Nav) {
                     Text("Version ${BuildConfig.VERSION_NAME}", style = mono(12.sp, color = C.TextMid))
                     Spacer(Modifier.height(10.dp))
                     Text("Made by Hassasin", style = body(15.sp, FontWeight.Bold, C.AmberText))
-                    Text("github.com/Dataman252", style = mono(11.sp, color = C.TextMid))
+                    Text("github.com/Dataman252/HassasinMusic", style = mono(11.sp, color = C.TextMid))
+                    Spacer(Modifier.height(14.dp))
+                    Chip("☕  Buy me a coffee (UPI)", false) { Donate.showing = true }
                 }
             }
             CREDITS.forEach { (section, list) ->

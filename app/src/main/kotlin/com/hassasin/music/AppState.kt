@@ -155,7 +155,7 @@ object AppState {
 
     fun init(context: Context) {
         appContext = context.applicationContext
-        _settings.value = Store.load("settings.json", AppSettings())
+        _settings.value = Store.load("settings.json", AppSettings()).let { if (it.output == "android") it.copy(output = "tuned") else it }
         SoundState.set(_settings.value.sound)
         _stats.value = Store.load<Map<Long, TrackStat>>("stats.json", emptyMap())
     }

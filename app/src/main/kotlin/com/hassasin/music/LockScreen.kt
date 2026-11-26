@@ -223,10 +223,10 @@ fun LockPlayer(onClose: () -> Unit) {
                     else -> GlowCover(art, glow, side * 0.92f) {}
                 }
             }
-            Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 val title = ArtRepo.cleanSongTitle(t.title).ifBlank { t.title }
-                Text(if (Look.flow) title.uppercase() else title, style = display(if (Look.flow) 28.sp else 22.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(t.artist.ifBlank { "Unknown artist" }, style = body(15.sp, FontWeight.SemiBold, Color.White.copy(alpha = 0.88f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (Look.flow) title.uppercase() else title, style = display(if (Look.flow) 28.sp else 22.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                Text(t.artist.ifBlank { "Unknown artist" }, style = body(15.sp, FontWeight.SemiBold, Color.White.copy(alpha = 0.88f)), maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                 QualityLine(t)
             }
             Spacer(Modifier.height(10.dp))

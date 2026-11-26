@@ -149,6 +149,8 @@ class MainActivity : ComponentActivity() {
         // Connecting to the media service is what lets it show the notification and lock-screen controls.
         controller = MediaController.Builder(this, SessionToken(this, ComponentName(this, PlaybackService::class.java))).buildAsync()
         setContent { Root() }
+        // New versions come from the app's GitHub releases (checked at most once an hour).
+        lifecycleScope.launch { Updater.check(applicationContext) }
     }
 
     override fun onDestroy() {
@@ -241,6 +243,7 @@ class MainActivity : ComponentActivity() {
                     }
                     SheetHost(nav)
                     VolumeHud(volumeShownAt)
+                    DonatePrompt()
                 }
             }
         }

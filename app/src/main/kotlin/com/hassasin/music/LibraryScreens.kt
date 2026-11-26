@@ -363,6 +363,7 @@ fun LibraryHub(nav: Nav) {
                 Spacer(Modifier.width(10.dp))
                 RoundButton(I.Settings, "Settings", { nav.go(Route.Settings) })
             }
+            UpdateBanner(Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(LIB_TABS) { i, t ->
                     val on = i == libraryTab

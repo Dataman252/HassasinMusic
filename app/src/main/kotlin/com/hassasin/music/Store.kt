@@ -10,8 +10,11 @@ val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint =
 
 @Serializable
 data class AppSettings(
-    /** "android" or "usb" (USB Direct whenever a DAC with access is plugged in). */
-    val output: String = "usb",
+    /**
+     * Output: "tuned" (the phone's decoder and sound tuning, default), "hires" (32-bit float to
+     * Android), "offload" (the phone's audio chip decodes), "usb" (USB Direct, bit-perfect to a DAC).
+     */
+    val output: String = "tuned",
     val dacVolumeDb: Double = -40.0,
     /** Highest DAC volume allowed, to protect sensitive earphones. */
     val dacMaxDb: Double = -10.0,

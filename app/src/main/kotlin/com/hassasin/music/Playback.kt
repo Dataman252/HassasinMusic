@@ -59,10 +59,17 @@ private class MusicRenderersFactory(context: Context) : DefaultRenderersFactory(
     }
 
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink {
-        val android = DefaultAudioSink.Builder(context)
+        // Rich tuned / offload: 16-bit with the app's effects. Hi-Res: 32-bit float for hi-res files.
+        val tuned = DefaultAudioSink.Builder(context)
             .setAudioProcessors(arrayOf(SoundEngine(forUsb = false)))
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .build()
+        val hires = DefaultAudioSink.Builder(context)
+            .setAudioProcessors(arrayOf(SoundEngine(forUsb = false)))
+            .setEnableFloatOutput(true)
+            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+            .build()
+        val android = DualSink.create(tuned, hires)
         return UsbAudioSink(context, android, SoundEngine(forUsb = true)) {
             val s = AppState.settings.value
             // During a call the DAC belongs to Android, so the call uses your earphones and the DAC's microphone.
@@ -139,7 +146,23 @@ object Playback {
                 if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare(); player.play() }
             }
         })
+        // Which decoder runs and what Android is sent, for the quality details.
+        player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onAudioInputFormatChanged(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, format: androidx.media3.common.Format, decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?) {
+                AudioPathInfo.path.value = AudioPathInfo.path.value.copy(inputMime = format.sampleMimeType ?: "", decoder = if (format.sampleMimeType == androidx.media3.common.MimeTypes.AUDIO_RAW) "" else AudioPathInfo.path.value.decoder, updatedAt = System.currentTimeMillis())
+            }
+            override fun onAudioDecoderInitialized(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+                AudioPathInfo.path.value = AudioPathInfo.path.value.copy(decoder = decoderName, offload = false, updatedAt = System.currentTimeMillis())
+            }
+            override fun onAudioTrackInitialized(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, audioTrackConfig: androidx.media3.exoplayer.audio.AudioSink.AudioTrackConfig) {
+                AudioPathInfo.path.value = AudioPathInfo.path.value.copy(
+                    trackEncoding = audioTrackConfig.encoding, trackRate = audioTrackConfig.sampleRate,
+                    trackChannels = Integer.bitCount(audioTrackConfig.channelConfig), offload = audioTrackConfig.offload, updatedAt = System.currentTimeMillis(),
+                )
+            }
+        })
         val s = AppState.settings.value
+        applyOffload(s.output)
         player.shuffleModeEnabled = s.shuffle
         player.repeatMode = when (s.repeat) { 1 -> Player.REPEAT_MODE_ALL; 2 -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF }
         scope.launch { while (true) { tick(); delay(250) } }
@@ -233,6 +256,26 @@ object Playback {
      * Sets the audio up again at the same spot: after the DAC is plugged in or out, the output
      * setting changes, or an effect is switched on/off (which adds or removes the sound engine).
      */
+    /** Turns the phone's offload (hardware decoding) on or off for the chosen output. */
+    private fun applyOffload(mode: String) {
+        val prefs = androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
+            .setAudioOffloadMode(
+                if (mode == "offload") androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                else androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
+            )
+            .setIsGaplessSupportRequired(false)
+            .build()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setAudioOffloadPreferences(prefs).build()
+    }
+
+    /** The user picked another output: set it up and restart the sound at the same spot. */
+    fun setOutput(mode: String) {
+        AppState.update { it.copy(output = mode) }
+        if (!::player.isInitialized) return
+        applyOffload(mode)
+        if (mode == "usb") onDacMaybeChanged() else rebuildAudio("output: $mode")
+    }
+
     fun rebuildAudio(why: String) {
         if (!::player.isInitialized || player.mediaItemCount == 0) return
         Log.i(TAG, "rebuilding audio: $why")

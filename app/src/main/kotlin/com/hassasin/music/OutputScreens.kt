@@ -101,15 +101,8 @@ fun OutputScreen(nav: Nav, sheet: Boolean = false) {
             }
             item {
                 Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Segmented(listOf("Android", "USB Direct"), if (s.output == "usb") 1 else 0) { i ->
-                        AppState.update { it.copy(output = if (i == 1) "usb" else "android") }
-                        Playback.onDacMaybeChanged()
-                    }
-                    Text(
-                        if (s.output == "usb") "USB Direct plays straight to your DAC whenever it's plugged in, at each song's own rate, skipping Android's mixer. Without a DAC, sound goes to the phone as usual."
-                        else "Android's normal output: the system mixer resamples and sets the volume.",
-                        style = body(12.sp, color = C.TextMid).copy(lineHeight = 18.sp),
-                    )
+                    Text("OUTPUT", style = eyebrow())
+                    Outputs.ALL.forEach { m -> OutputChoice(m, s.output == m.key) { Playback.setOutput(m.key) } }
                 }
             }
             item {
@@ -415,6 +408,8 @@ fun SettingsScreen(nav: Nav) {
                     RoundButton(I.Reset, "Read the library again", { scanning = true; scope.launch { AppState.scan(); scanning = false } }, 40.dp)
                 }
             }
+            item { UpdateRow() }
+            item { SettingRow("Support the developer", "A coffee by UPI keeps new versions coming") { RoundButton(I.Star, "Support the developer", { Donate.showing = true }, 40.dp) } }
             item { SettingRow("Credits", "Hassasin Music ${BuildConfig.VERSION_NAME} · who and what made it") { RoundButton(I.Star, "Credits", { nav.go(Route.Credits) }, 40.dp) } }
         }
     }
@@ -471,5 +466,38 @@ private fun LockScreenRow(on: Boolean) {
             Spacer(Modifier.width(8.dp))
         }
         Toggle(on, "Lock screen player") { v -> AppState.update { it.copy(lockScreen = v) } }
+    }
+}
+
+
+/** One output on the Output tab: a radio card with what it does and what it keeps. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun OutputChoice(m: OutputMode, on: Boolean, onPick: () -> Unit) {
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        Modifier.fillMaxWidth()
+            .then(if (on) Modifier.amberSelected(shape) else Modifier.raised(shape, 6.dp))
+            .clip(shape).clickable(onClick = onPick)
+            .padding(14.dp)
+            .semantics { contentDescription = "${m.title}${if (on) ", selected" else ""}" },
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(Modifier.padding(top = 2.dp).size(20.dp).clip(RoundedCornerShape(10.dp)).background(if (on) C.Amber else Color.White.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+            if (on) Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(C.OnAccent))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(m.title, style = body(15.sp, FontWeight.Bold, if (on) C.AmberText else C.TextHi))
+            Text(m.line, style = body(12.sp, color = C.TextMid).copy(lineHeight = 17.sp))
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                (m.tags + if (!m.effects) listOf("No app effects") else emptyList()).forEach { tag ->
+                    Text(
+                        tag, style = mono(10.sp, FontWeight.Bold, if (tag == "No app effects") C.TextLow else C.AmberText),
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (tag == "No app effects") Color.White.copy(alpha = 0.06f) else C.Amber.copy(alpha = 0.12f)).padding(horizontal = 7.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
     }
 }
