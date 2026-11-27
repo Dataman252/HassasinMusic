@@ -145,20 +145,41 @@ fun glowColor(b: Bitmap): Color {
     return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
+/** A 48 px, box-blurred copy of the cover, for backgrounds. */
+fun softened(src: Bitmap): Bitmap {
+    val n = 48
+    val small = Bitmap.createScaledBitmap(src, n, n, true)
+    val px = IntArray(n * n); small.getPixels(px, 0, n, 0, 0, n, n)
+    repeat(3) {
+        val out = IntArray(n * n)
+        for (y in 0 until n) for (x in 0 until n) {
+            var r = 0; var g = 0; var b = 0; var c = 0
+            for (dy in -2..2) for (dx in -2..2) {
+                val xx = (x + dx).coerceIn(0, n - 1); val yy = (y + dy).coerceIn(0, n - 1)
+                val p = px[yy * n + xx]; r += (p shr 16) and 255; g += (p shr 8) and 255; b += p and 255; c++
+            }
+            out[y * n + x] = (0xFF shl 24) or ((r / c) shl 16) or ((g / c) shl 8) or (b / c)
+        }
+        out.copyInto(px)
+    }
+    return Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888)
+}
+
 /** The whole screen behind the player: the cover itself, blurred and dimmed, plus its glow. */
 @Composable
-fun BoxScope.ImmersiveBackground(art: Bitmap?, glow: Color) {
+fun BoxScope.ImmersiveBackground(art: Bitmap?, glow: () -> Color) {
     Box(Modifier.matchParentSize().background(C.Ground))
     if (Look.soft) {
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xFF2C2E33), Color(0xFF222428)))))
         return
     }
-    if (art != null && Build.VERSION.SDK_INT >= 31) {
-        Image(art.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize().blur(60.dp).alpha(0.55f))
-    }
+    // The cover softened once into a tiny image and stretched: looks like a heavy blur, but costs
+    // nothing per frame (a live 60 dp blur over the whole screen made screen changes stutter).
+    val soft = remember(art) { art?.let { softened(it).asImageBitmap() } }
+    if (soft != null) Image(soft, null, contentScale = ContentScale.Crop, filterQuality = androidx.compose.ui.graphics.FilterQuality.High, modifier = Modifier.matchParentSize().alpha(0.55f))
     Box(
         Modifier.matchParentSize().drawWithContent {
-            drawRect(Brush.radialGradient(listOf(glow.copy(alpha = 0.45f), Color.Transparent), center = Offset(size.width / 2, size.height * 0.45f), radius = size.width * 1.1f))
+            drawRect(Brush.radialGradient(listOf(glow().copy(alpha = 0.45f), Color.Transparent), center = Offset(size.width / 2, size.height * 0.45f), radius = size.width * 1.1f))
             drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Black.copy(alpha = 0.55f), C.Ground.copy(alpha = 0.92f)), startY = size.height * 0.3f))
         },
     )

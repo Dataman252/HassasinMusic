@@ -50,7 +50,9 @@ object LyricsRepo {
     private const val TAG = "Lyrics"
     private const val RETRY_MS = 24L * 3600 * 1000
     /** Bump when the search improves, so earlier "not found" answers are tried again. */
-    private const val LOGIC = 7
+    private const val LOGIC = 8
+    /** Marks timed lyrics taken from another cut of the song: right spacing, maybe a different start. */
+    const val OTHER_VERSION = "LRCLIB · other version"
     private lateinit var dir: File
 
     fun init(context: Context) { dir = File(context.filesDir, "lyrics").apply { mkdirs() } }
@@ -134,22 +136,27 @@ object LyricsRepo {
         val local = sidecar(t)?.let { parse(it, null, false, "File") } ?: Tags.embeddedLyrics(t.path)?.let { parse(it, null, false, "Tags") }
         if (local?.synced != null) return@withContext local
         fun better(found: Lyrics?): Lyrics? = if (found != null && (local == null || found.synced != null)) found else local
-        if (cached != null && !force) {
+        if (cached != null && !force && !untimedFromOlderLogic(cached)) {
             if (cached.found) return@withContext better(parse(cached.raw, cached.plain, cached.instrumental, cached.source))
             if (cached.logic >= LOGIC && System.currentTimeMillis() - cached.checkedAt < RETRY_MS) return@withContext local
         }
         if (!online) return@withContext local
         val hit = lookup(t)
-        Store.save("lyrics/${cacheFile(t).name}", hit?.let { CachedLyrics(true, it.synced ?: it.plain, it.plain, it.instrumental, "LRCLIB", logic = LOGIC) } ?: CachedLyrics(false, logic = LOGIC))
-        better(hit?.let { parse(it.synced, it.plain, it.instrumental, "LRCLIB") })
+        val src = if (hit?.title == OTHER_VERSION) OTHER_VERSION else "LRCLIB"
+        Store.save("lyrics/${cacheFile(t).name}", hit?.let { CachedLyrics(true, it.synced ?: it.plain, it.plain, it.instrumental, src, logic = LOGIC) } ?: CachedLyrics(false, logic = LOGIC))
+        better(hit?.let { parse(it.synced, it.plain, it.instrumental, src) })
     }
 
     /** True when this track still needs an online look-up (nothing local, nothing cached that counts). */
     fun needsLookup(t: Track): Boolean {
         val cached = Store.load<CachedLyrics?>("lyrics/${cacheFile(t).name}", null) ?: return true
-        if (cached.found) return false
+        if (cached.found) return untimedFromOlderLogic(cached)
         return cached.logic < LOGIC || System.currentTimeMillis() - cached.checkedAt >= RETRY_MS
     }
+
+    /** Words without timing found by older logic, which dropped the timing of other versions: look again once. */
+    private fun untimedFromOlderLogic(c: CachedLyrics) =
+        c.found && !c.userChosen && c.source == "LRCLIB" && c.logic < LOGIC && !c.instrumental && (c.raw == null || !stamp.containsMatchIn(c.raw))
 
     fun sidecar(t: Track): String? {
         val base = t.path.substringBeforeLast('.')
@@ -195,10 +202,11 @@ object LyricsRepo {
             results.forEach { seen.putIfAbsent(it.id, it) }
             pick(seen.values.toList(), secs, clean)?.let { Log.i(TAG, "search match for '${t.title}' as '$clean'"); return it }
         }
-        // 3. Only another version of the song (Jhankar, remix, a longer cut): its words, without timing.
+        // 3. Only another version of the song (Jhankar, remix, a longer cut): its words keep their timing,
+        //    which is right line to line; one tap on the first line lines the whole song up.
         pickOtherVersion(seen.values.toList(), secs, clean)?.let { c ->
-            Log.i(TAG, "other version for '${t.title}': ${c.durationSec}s vs ${secs}s, shown without timing")
-            return c.copy(synced = null, plain = c.plain ?: c.synced?.let { stripTimes(it) })
+            Log.i(TAG, "other version for '${t.title}': ${c.durationSec}s vs ${secs}s, timing kept for first-line matching")
+            return c.copy(plain = c.plain ?: c.synced?.let { stripTimes(it) }, title = OTHER_VERSION)
         }
         Log.i(TAG, "no lyrics for '${t.title}' by '$artist'")
         return null

@@ -182,7 +182,8 @@ fun LockPlayer(onClose: () -> Unit) {
     val album = albumOf(t)
     val art = rememberArtBitmap(album)
     val glowTarget = remember(art) { art?.let { glowColor(it) } ?: Color(0xFF6D5BFF) }
-    val glow by animateColorAsState(glowTarget, tween(700), label = "lock glow")
+    val glowAnim = animateColorAsState(glowTarget, tween(700), label = "lock glow")
+    val glow = glowAnim.value
     SideEffect { Look.tint = glow }
     var drag by remember { mutableFloatStateOf(0f) }
     val now by produceState(System.currentTimeMillis()) { while (true) { value = System.currentTimeMillis(); delay(1000) } }
@@ -207,7 +208,7 @@ fun LockPlayer(onClose: () -> Unit) {
                         .drawWithContent { drawContent(); drawRect(Brush.verticalGradient(0.4f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn) },
                 )
             }
-            else -> ImmersiveBackground(art, glow)
+            else -> ImmersiveBackground(art) { glowAnim.value }
         }
         Visualizer(settings.vizStyle, (if (Look.flow) lerpColor(glow, Color.White, 0.25f) else C.Amber).copy(alpha = 0.5f), Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(150.dp))
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -220,7 +221,7 @@ fun LockPlayer(onClose: () -> Unit) {
                 when {
                     Look.flow -> Unit // the cover is the background
                     Look.soft -> SoftDisc(art, side * 0.92f, st.playing) {}
-                    else -> GlowCover(art, glow, side * 0.92f) {}
+                    else -> GlowCover(art, { glowAnim.value }, side * 0.92f) {}
                 }
             }
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {

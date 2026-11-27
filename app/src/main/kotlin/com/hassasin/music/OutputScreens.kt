@@ -396,6 +396,20 @@ fun SettingsScreen(nav: Nav) {
                 }
             }
             item { LockScreenRow(s.lockScreen) }
+            item {
+                Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Notification player", style = body(14.sp, FontWeight.Bold))
+                    Text("Second line", style = body(12.sp, FontWeight.Bold, C.TextMid))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("quality" to "Artist · quality", "lyrics" to "Live lyrics", "artist" to "Artist only").forEach { (k, label) -> Chip(label, s.notifLine == k) { AppState.update { it.copy(notifLine = k) } } }
+                    }
+                    Text("Buttons", style = body(12.sp, FontWeight.Bold, C.TextMid))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NotifButtons.CHOICES.forEach { (k, label) -> Chip(label, s.notifButtons == k) { AppState.update { it.copy(notifButtons = k) } } }
+                    }
+                    Text("Your phone draws this card itself; the app fills it in. Songs without a picture get a cover made for them.", style = body(12.sp, color = C.TextMid))
+                }
+            }
             item { SettingRow("Music folders", if (s.musicFolders.isEmpty()) "Playing from every folder" else "Playing from ${s.musicFolders.size} chosen folder${if (s.musicFolders.size == 1) "" else "s"}") { RoundButton(I.Folder, "Music folders", { nav.go(Route.Folders) }, 40.dp) } }
             item { SettingRow("Album pictures", "See and fix covers that are missing or wrong") { RoundButton(I.Image, "Album pictures", { nav.go(Route.FixArt()) }, 40.dp) } }
             item { SettingRow("Find album art online", "Missing pictures from MusicBrainz, sure matches only") { Toggle(s.autoArt, "Find album art online") { on -> AppState.update { it.copy(autoArt = on) }; if (on) AppState.findMissingArt() } } }

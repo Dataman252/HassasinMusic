@@ -178,7 +178,7 @@ object Playback {
         .setMediaMetadata(
             MediaMetadata.Builder().setTitle(t.title).setArtist(t.artist).setAlbumTitle(t.album)
                 .setAlbumArtist(t.albumArtist).setTrackNumber(t.trackNo).setIsPlayable(true).setIsBrowsable(false)
-                .setArtworkUri(android.net.Uri.parse("hassasin-art://${t.id}")).build(),
+                .setArtworkUri(ArtProvider.uriFor(t.id)).build(),
         )
         .build()
 

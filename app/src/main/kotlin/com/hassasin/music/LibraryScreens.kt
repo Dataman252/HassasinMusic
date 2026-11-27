@@ -1,5 +1,11 @@
 package com.hassasin.music
 
+import kotlinx.coroutines.launch
+
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.animation.core.animateFloat
+
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
@@ -338,9 +344,9 @@ private data class LibTab(val label: String, val icon: String, val kind: String)
 
 /** In the order people reach for them: everything, what you just played, your favourites, then the rest. */
 private val LIB_TABS = listOf(
-    LibTab("All songs", I.Note, "all"), LibTab("Recently played", I.Clock, "played"), LibTab("Most played", I.Chart, "most"),
-    LibTab("Hi-Res", I.HiRes, "hires"), LibTab("Albums", I.Album, "albums"), LibTab("Artists", I.Artist, "artists"),
-    LibTab("Folders", I.Folder, "folders"), LibTab("Recently added", I.Plus, "recent"), LibTab("Top rated", I.Star, "top"),
+    LibTab("All songs", I.Note, "all"), LibTab("Recently added", I.Plus, "recent"), LibTab("Recently played", I.Clock, "played"),
+    LibTab("Most played", I.Chart, "most"), LibTab("Hi-Res", I.HiRes, "hires"), LibTab("Albums", I.Album, "albums"),
+    LibTab("Artists", I.Artist, "artists"), LibTab("Folders", I.Folder, "folders"), LibTab("Top rated", I.Star, "top"),
 )
 
 /**
@@ -352,13 +358,32 @@ fun LibraryHub(nav: Nav) {
     val lib by AppState.library.collectAsState()
     val stats by AppState.stats.collectAsState()
     val st by Playback.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
     Backdrop(Color(0xFF1B1F4A), Color(0xFF3D5BFF)) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Library", style = display(26.sp))
-                    Text(if (lib.scanned) "${lib.tracks.size} songs · ${lib.albums.size} albums" else "Reading your library…", style = body(12.sp, color = C.TextMid))
+                    Text(
+                        when {
+                            refreshing -> "Reading your library again…"
+                            lib.scanned -> "${lib.tracks.size} songs · ${lib.albums.size} albums"
+                            else -> "Reading your library…"
+                        },
+                        style = body(12.sp, color = C.TextMid),
+                    )
                 }
+                // Reads the library again (new or deleted songs); the icon turns while it works.
+                val spin = androidx.compose.animation.core.rememberInfiniteTransition(label = "refresh")
+                val angle by spin.animateFloat(0f, 360f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
+                Box(Modifier.graphicsLayer { rotationZ = if (refreshing) angle else 0f }) {
+                    RoundButton(I.Reset, "Refresh the library", {
+                        if (!refreshing) { refreshing = true; scope.launch { runCatching { AppState.rescan(context) }; refreshing = false } }
+                    })
+                }
+                Spacer(Modifier.width(10.dp))
                 RoundButton(I.Search, "Search", { nav.go(Route.Search) })
                 Spacer(Modifier.width(10.dp))
                 RoundButton(I.Settings, "Settings", { nav.go(Route.Settings) })

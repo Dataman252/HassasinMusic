@@ -36,7 +36,16 @@ object Waveform {
         arr
     }
 
-    private suspend fun decode(t: Track): FloatArray? {
+    private val fineMemory = HashMap<Long, FloatArray>()
+
+    /** Loudness 20 times a second, for the lyric-sync timeline (decoded once per song, kept in memory). */
+    suspend fun fine(t: Track): FloatArray? = withContext(Dispatchers.IO) {
+        fineMemory[t.id]?.let { return@withContext it }
+        val bars = (t.durationMs / 50).toInt().coerceIn(BARS, 20 * 60 * 30)
+        runCatching { decode(t, bars) }.getOrNull()?.also { synchronized(fineMemory) { fineMemory.clear(); fineMemory[t.id] = it } }
+    }
+
+    private suspend fun decode(t: Track, BARS: Int = Waveform.BARS): FloatArray? {
         val ex = MediaExtractor()
         try {
             ex.setDataSource(t.path)

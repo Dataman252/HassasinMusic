@@ -183,7 +183,13 @@ class MainActivity : ComponentActivity() {
         Look.soft = settings.theme == "soft"
         Look.flow = settings.theme == "flow"
         Viz.enabled = settings.vizStyle != "off"
-        BackHandler(enabled = nav.stack.size > 1) { nav.back() }
+        // Back: from the library it goes to Now playing (when a song is loaded); from Now playing over the
+        // library it leaves the app, so the two never bounce back and forth.
+        val hasSong = Playback.state.collectAsState().value.current != null
+        val playerOnLibrary = nav.stack.size == 2 && nav.stack.last() == Route.Player
+        BackHandler(enabled = (nav.stack.size > 1 && !playerOnLibrary) || (nav.stack.size == 1 && hasSong)) {
+            if (nav.stack.size == 1) nav.go(Route.Player) else nav.back()
+        }
         // Changing the look rebuilds every surface with the new colours.
         key(settings.theme) {
             Box(Modifier.fillMaxSize().background(C.Ground)) {
@@ -203,7 +209,7 @@ class MainActivity : ComponentActivity() {
                                 val spring = spring<IntOffset>(dampingRatio = 0.9f, stiffness = 380f)
                                 when {
                                     // The player rises from the bottom and sinks back down.
-                                    targetState == Route.Player -> (slideInVertically(spring) { it / 3 } + fadeIn(tween(260)) + scaleIn(tween(320), 0.96f)) togetherWith fadeOut(tween(180))
+                                    targetState == Route.Player -> (slideInVertically(spring) { it / 3 } + fadeIn(tween(260))) togetherWith fadeOut(tween(180))
                                     initialState == Route.Player -> fadeIn(tween(260)) togetherWith (slideOutVertically(spring) { it / 3 } + fadeOut(tween(200)))
                                     forward -> (slideInHorizontally(spring) { it / 4 } + fadeIn(tween(240))) togetherWith (slideOutHorizontally(spring) { -it / 8 } + fadeOut(tween(160)))
                                     else -> (slideInHorizontally(spring) { -it / 4 } + fadeIn(tween(240))) togetherWith (slideOutHorizontally(spring) { it / 8 } + fadeOut(tween(160)))

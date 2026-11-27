@@ -36,6 +36,10 @@ class PlaybackService : MediaSessionService() {
     companion object {
         private val SHUFFLE = androidx.media3.session.SessionCommand("hassasin.SHUFFLE", android.os.Bundle.EMPTY)
         private val REPEAT = androidx.media3.session.SessionCommand("hassasin.REPEAT", android.os.Bundle.EMPTY)
+        private val BACK10 = androidx.media3.session.SessionCommand("hassasin.BACK10", android.os.Bundle.EMPTY)
+        private val FWD10 = androidx.media3.session.SessionCommand("hassasin.FWD10", android.os.Bundle.EMPTY)
+        private val LOVE = androidx.media3.session.SessionCommand("hassasin.LOVE", android.os.Bundle.EMPTY)
+        private val LYRICLINE = androidx.media3.session.SessionCommand("hassasin.LYRICLINE", android.os.Bundle.EMPTY)
     }
 
     override fun onCreate() {
@@ -49,13 +53,14 @@ class PlaybackService : MediaSessionService() {
         setMediaNotificationProvider(
             androidx.media3.session.DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_stat_hassasin) },
         )
-        val s = MediaSession.Builder(this, Playback.player)
+        val np = NotifPlayer(Playback.player)
+        val s = MediaSession.Builder(this, np)
             .setSessionActivity(open)
             .setBitmapLoader(ArtBitmapLoader(this))
             .setCallback(object : MediaSession.Callback {
                 override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
                     MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                        .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon().add(SHUFFLE).add(REPEAT).build())
+                        .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon().add(SHUFFLE).add(REPEAT).add(BACK10).add(FWD10).add(LOVE).add(LYRICLINE).build())
                         .build()
 
                 override fun onCustomCommand(
@@ -65,26 +70,49 @@ class PlaybackService : MediaSessionService() {
                     when (customCommand.customAction) {
                         SHUFFLE.customAction -> Playback.setShuffle(!Playback.state.value.shuffle)
                         REPEAT.customAction -> Playback.cycleRepeat()
+                        BACK10.customAction -> Playback.seekTo((Playback.positionNow() - 10_000).coerceAtLeast(0))
+                        FWD10.customAction -> Playback.seekTo(Playback.positionNow() + 10_000)
+                        LOVE.customAction -> Playback.state.value.current?.let { t -> AppState.rate(t, if (loved(t)) 0 else 5) }
+                        LYRICLINE.customAction -> AppState.update { it.copy(notifLine = if (it.notifLine == "lyrics") "quality" else "lyrics") }
                     }
                     return com.google.common.util.concurrent.Futures.immediateFuture(androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS))
                 }
             })
             .build()
         session = s
-        // Shuffle and repeat buttons beside the play controls, showing their current state.
+        // The two buttons beside the play controls (chosen in Settings), showing their current state.
         scope.launch {
-            Playback.state.collect { st -> s.setCustomLayout(buttons(st.shuffle, st.repeat)) }
+            kotlinx.coroutines.flow.combine(Playback.state, AppState.settings, AppState.stats) { st, set, _ -> Triple(st, set.notifButtons, set.notifLine) }
+                .collect { (st, which, line) -> s.setCustomLayout(buttons(which, st, line)) }
         }
+        // The second line: quality and output, or the lyric being sung.
+        NotifUpdater.start(this, scope, np)
     }
 
-    @Suppress("DEPRECATION")
-    private fun buttons(shuffle: Boolean, repeat: Int) = com.google.common.collect.ImmutableList.of(
-        androidx.media3.session.CommandButton.Builder(if (shuffle) androidx.media3.session.CommandButton.ICON_SHUFFLE_ON else androidx.media3.session.CommandButton.ICON_SHUFFLE_OFF)
-            .setDisplayName(if (shuffle) "Shuffle on" else "Shuffle off").setSessionCommand(SHUFFLE).build(),
-        androidx.media3.session.CommandButton.Builder(
-            when (repeat) { 1 -> androidx.media3.session.CommandButton.ICON_REPEAT_ALL; 2 -> androidx.media3.session.CommandButton.ICON_REPEAT_ONE; else -> androidx.media3.session.CommandButton.ICON_REPEAT_OFF },
-        ).setDisplayName(when (repeat) { 1 -> "Repeat all"; 2 -> "Repeat one"; else -> "Repeat off" }).setSessionCommand(REPEAT).build(),
-    )
+    private fun loved(t: Track) = (AppState.stats.value[t.id]?.rating ?: 0) >= 5
+
+    private fun button(icon: Int, name: String, cmd: androidx.media3.session.SessionCommand) =
+        androidx.media3.session.CommandButton.Builder(icon).setDisplayName(name).setSessionCommand(cmd).build()
+
+    private fun buttons(which: String, st: PlayState, line: String): com.google.common.collect.ImmutableList<androidx.media3.session.CommandButton> {
+        return when (which) {
+            "seek" -> com.google.common.collect.ImmutableList.of(
+                button(androidx.media3.session.CommandButton.ICON_SKIP_BACK_10, "Back 10 seconds", BACK10),
+                button(androidx.media3.session.CommandButton.ICON_SKIP_FORWARD_10, "Forward 10 seconds", FWD10),
+            )
+            "love_lyrics" -> {
+                val loved = st.current?.let(::loved) == true
+                com.google.common.collect.ImmutableList.of(
+                    button(if (loved) androidx.media3.session.CommandButton.ICON_HEART_FILLED else androidx.media3.session.CommandButton.ICON_HEART_UNFILLED, if (loved) "Loved" else "Love", LOVE),
+                    button(if (line == "lyrics") androidx.media3.session.CommandButton.ICON_SUBTITLES else androidx.media3.session.CommandButton.ICON_SUBTITLES_OFF, if (line == "lyrics") "Lyrics line on" else "Lyrics line off", LYRICLINE),
+                )
+            }
+            else -> com.google.common.collect.ImmutableList.of(
+                button(if (st.shuffle) androidx.media3.session.CommandButton.ICON_SHUFFLE_ON else androidx.media3.session.CommandButton.ICON_SHUFFLE_OFF, if (st.shuffle) "Shuffle on" else "Shuffle off", SHUFFLE),
+                button(when (st.repeat) { 1 -> androidx.media3.session.CommandButton.ICON_REPEAT_ALL; 2 -> androidx.media3.session.CommandButton.ICON_REPEAT_ONE; else -> androidx.media3.session.CommandButton.ICON_REPEAT_OFF }, when (st.repeat) { 1 -> "Repeat all"; 2 -> "Repeat one"; else -> "Repeat off" }, REPEAT),
+            )
+        }
+    }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
@@ -103,7 +131,7 @@ class PlaybackService : MediaSessionService() {
 
 /**
  * Gives the notification, lock screen and car/watch controls the same cover the app shows
- * (songs carry "hassasin-art://<track id>" as their artwork address).
+ * (songs carry "content://com.hassasin.music.art/track/<id>" as their artwork address; see ArtProvider).
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ArtBitmapLoader(context: Context) : androidx.media3.common.util.BitmapLoader {
@@ -115,12 +143,11 @@ class ArtBitmapLoader(context: Context) : androidx.media3.common.util.BitmapLoad
     override fun decodeBitmap(data: ByteArray) = fallback.decodeBitmap(data)
 
     override fun loadBitmap(uri: android.net.Uri): com.google.common.util.concurrent.ListenableFuture<android.graphics.Bitmap> {
-        if (uri.scheme != "hassasin-art") return fallback.loadBitmap(uri)
+        val id = ArtProvider.idOf(uri) ?: return fallback.loadBitmap(uri)
         val future = com.google.common.util.concurrent.SettableFuture.create<android.graphics.Bitmap>()
         scope.launch {
-            val id = uri.host?.toLongOrNull()
-            val track = AppState.library.value.tracks.firstOrNull { it.id == id }
-            val bmp = albumOf(track)?.let { ArtRepo.bitmap(it, 720) }
+            // No picture: a cover made for the song, never the system's grey note.
+            val bmp = ArtProvider.bitmapFor(id)
             if (bmp != null) future.set(bmp) else future.setException(IllegalStateException("no cover"))
         }
         return future
@@ -185,6 +212,30 @@ object AppState {
     }
 
     private var artJob: Job? = null
+
+    /**
+     * Refresh from the Library page: music files Android has not indexed yet (just downloaded or copied)
+     * are handed to its media scanner first, then the library is read again.
+     */
+    suspend fun rescan(context: Context) {
+        withContext(Dispatchers.IO) {
+            val known = _library.value.tracks.map { it.path }.toHashSet()
+            val storage = android.os.Environment.getExternalStorageDirectory()
+            val roots = (_library.value.allFolders.map { if (it.startsWith("/")) java.io.File(it) else java.io.File(storage, it) } +
+                listOf(java.io.File(storage, "Music"), java.io.File(storage, "Download")))
+                .filter { it.isDirectory }.distinctBy { it.absolutePath }
+            val audio = setOf("mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "aiff", "aif", "wma", "dsf", "dff", "ape")
+            val fresh = roots.flatMap { r -> r.walkTopDown().maxDepth(4).filter { it.isFile && it.extension.lowercase() in audio && it.absolutePath !in known }.toList() }
+                .map { it.absolutePath }.distinct().take(2000)
+            if (fresh.isNotEmpty()) {
+                val done = kotlinx.coroutines.CompletableDeferred<Unit>()
+                val left = java.util.concurrent.atomic.AtomicInteger(fresh.size)
+                android.media.MediaScannerConnection.scanFile(context, fresh.toTypedArray(), null) { _, _ -> if (left.decrementAndGet() == 0) done.complete(Unit) }
+                kotlinx.coroutines.withTimeoutOrNull(20_000) { done.await() }
+            }
+        }
+        scan()
+    }
 
     suspend fun scan() {
         val all = withContext(Dispatchers.IO) { Library.scan(appContext, _settings.value) }

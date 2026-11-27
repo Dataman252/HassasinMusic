@@ -35,6 +35,10 @@ data class AppSettings(
     val onlineOnWifiOnly: Boolean = false,
     /** Show the player (in the chosen look) on the lock screen while music plays. */
     val lockScreen: Boolean = true,
+    /** Second line of the notification card: "quality" (artist · format · output), "lyrics" (the line sung now), "artist". */
+    val notifLine: String = "quality",
+    /** Buttons beside the play controls on the card: "shuffle_repeat", "seek", "love_lyrics". */
+    val notifButtons: String = "shuffle_repeat",
     /** Cover sharpness on the player, −100 (softer) … 0 (as is) … 200 (sharper). */
     val artSharpness: Int = 0,
     /** Shorter files (ringtones, voice notes) are left out of the library. */

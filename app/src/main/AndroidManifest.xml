@@ -61,6 +61,11 @@
                 android:resource="@xml/usb_audio_devices" />
         </activity>
 
+        <!-- Read-only covers for the media card, vivo's music widget, watches and cars. -->
+        <provider
+            android:name=".ArtProvider"
+            android:authorities="com.hassasin.music.art"
+            android:exported="true" />
         <service
             android:name=".PlaybackService"
             android:exported="true"

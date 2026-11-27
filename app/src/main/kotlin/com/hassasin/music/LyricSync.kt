@@ -6,6 +6,8 @@ package com.hassasin.music
  * lines landed 7-20 s off (instrumental breaks and repeated lines), so the app does not guess.
  */
 object LyricSync {
+    /** How late a tap lands after the sound, on average (human reaction to a line starting). */
+    const val REACTION_MS = 200L
     private val label = Regex("^[\\[(]?(chorus|verse|hook|intro|outro|bridge|pre-chorus|refrain)[^)\\]]*[)\\]]?:?$", RegexOption.IGNORE_CASE)
 
     /** Lines worth timing: blank lines (stanza breaks) and labels like "[Chorus]" are skipped. */
