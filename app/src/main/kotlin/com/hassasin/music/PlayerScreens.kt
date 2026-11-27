@@ -904,20 +904,12 @@ fun CoverPager(st: PlayState, page: @Composable (Track, Boolean) -> Unit) {
     if (queue.isEmpty() || st.index !in queue.indices) return
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = st.index) { queue.size }
     val style = AppState.settings.collectAsState().value.coverAnim
-    // Slide glides the pages along; the other styles switch the page and animate the new cover in.
-    val reveal = remember { androidx.compose.animation.core.Animatable(1f) }
-    // The cover being replaced, drawn over the new one while it leaves (Fade, Zoom, Flip).
-    var outgoing by remember { mutableStateOf<Track?>(null) }
+    // Every change of song, by swipe or by itself, moves the pager; the chosen style is drawn from the
+    // pager position, so the animation follows the finger while swiping.
     LaunchedEffect(st.index) {
         if (pager.currentPage != st.index && st.index in queue.indices) {
-            if (style == "slide") pager.animateScrollToPage(st.index)
-            else {
-                outgoing = queue.getOrNull(pager.currentPage)
-                reveal.snapTo(0f)
-                pager.scrollToPage(st.index)
-                reveal.animateTo(1f, androidx.compose.animation.core.tween(when (style) { "flip" -> 700; "zoom" -> 650; else -> 600 }, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-                outgoing = null
-            }
+            if (kotlin.math.abs(pager.currentPage - st.index) > 1) pager.scrollToPage(st.index)
+            else pager.animateScrollToPage(st.index, animationSpec = androidx.compose.animation.core.tween(if (style == "slide") 450 else 650, easing = androidx.compose.animation.core.FastOutSlowInEasing))
         }
     }
     LaunchedEffect(pager) {
@@ -925,33 +917,33 @@ fun CoverPager(st: PlayState, page: @Composable (Track, Boolean) -> Unit) {
             if (p != Playback.state.value.index && p in Playback.state.value.queue.indices) Playback.jumpTo(p)
         }
     }
-    Box(Modifier.fillMaxSize()) {
-    androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, pageSpacing = 16.dp) { i ->
+    val gap = 16.dp
+    androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, pageSpacing = gap) { i ->
         val song = queue.getOrNull(i) ?: return@HorizontalPager
         Box(Modifier.fillMaxSize().graphicsLayer {
-            val off = ((pager.currentPage - i) + pager.currentPageOffsetFraction).let { kotlin.math.abs(it) }.coerceIn(0f, 1f)
-            val sc = 1f - off * 0.12f
-            scaleX = sc; scaleY = sc; alpha = 1f - off * 0.5f
-            val r = reveal.value
-            if (r < 1f && i == st.index) when (style) {
-                // The new cover: fades in / settles from 125 % / turns in once the old one has turned away.
-                "fade" -> alpha = r
-                "zoom" -> { val z = 1.25f - 0.25f * r; scaleX = z; scaleY = z; alpha = r }
-                "flip" -> { cameraDistance = 14f * density; if (r < 0.5f) alpha = 0f else rotationY = (1f - (r - 0.5f) * 2f) * 90f }
+            // o: 0 = in place, +1 = one page to the left (leaving), -1 = one page to the right (coming).
+            val o = ((pager.currentPage - i) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
+            val a = kotlin.math.abs(o)
+            // Fade, Zoom and Flip keep both covers in the same place (no sliding); only Slide moves.
+            val pin = o * (size.width + gap.toPx())
+            when (style) {
+                "fade" -> { translationX = pin; alpha = 1f - a }
+                "zoom" -> {
+                    translationX = pin
+                    // The cover to the right comes from 125 % and settles; the one to the left shrinks away.
+                    val z = if (o < 0) 1f + 0.25f * a else 1f - 0.2f * a
+                    scaleX = z; scaleY = z; alpha = 1f - a
+                }
+                "flip" -> {
+                    translationX = pin
+                    cameraDistance = 14f * density
+                    // Half a turn: the old cover turns away to 90 degrees, then the new one turns in from 90.
+                    rotationY = o * 180f
+                    alpha = if (a <= 0.5f) 1f else 0f
+                }
+                else -> { val sc = 1f - a * 0.12f; scaleX = sc; scaleY = sc; alpha = 1f - a * 0.5f }
             }
         }) { page(song, i == st.index) }
-    }
-    // The old cover on top, leaving: fades out / shrinks away / turns away (first half of the flip).
-    outgoing?.let { old ->
-        Box(Modifier.fillMaxSize().graphicsLayer {
-            val r = reveal.value
-            when (style) {
-                "fade" -> alpha = 1f - r
-                "zoom" -> { val z = 1f - 0.2f * r; scaleX = z; scaleY = z; alpha = 1f - r }
-                "flip" -> { cameraDistance = 14f * density; if (r >= 0.5f) alpha = 0f else rotationY = -r * 2f * 90f }
-            }
-        }) { page(old, false) }
-    }
     }
 }
 

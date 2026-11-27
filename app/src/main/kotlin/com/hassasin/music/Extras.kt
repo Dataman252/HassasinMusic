@@ -128,6 +128,7 @@ object AutoResume {
 /** What changed in each version, shown once after an update and in Credits. */
 object Changelog {
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.9.2" to listOf("Fade, Zoom and Flip now play while you swipe the cover, following your finger"),
         "0.9.1" to listOf(
             "Plays count only after 30 seconds of listening; every song shows its play count, playlists their total",
             "Listening time per song; generator: 'Played 5+' rules, 'Most listened' order and preset",
