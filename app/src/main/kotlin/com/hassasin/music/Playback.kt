@@ -1,5 +1,9 @@
 package com.hassasin.music
 
+import kotlinx.coroutines.flow.distinctUntilChanged
+
+import kotlinx.coroutines.flow.map
+
 import android.content.Context
 import android.hardware.usb.UsbManager
 import android.os.Handler
@@ -62,12 +66,15 @@ private class MusicRenderersFactory(context: Context) : DefaultRenderersFactory(
 
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink {
         // Phone / Battery saver: 16-bit with the app's effects. Hi-Res: 32-bit float for hi-res files.
+        // The app's resampler (when switched on) runs first, then the effects engine.
+        val engineTuned = SoundEngine(forUsb = false)
+        val engineHires = SoundEngine(forUsb = false)
         val tuned = DefaultAudioSink.Builder(context)
-            .setAudioProcessors(arrayOf(SoundEngine(forUsb = false)))
+            .setAudioProcessors(arrayOf(AppResampler(context, floatSink = false, engine = engineTuned), engineTuned))
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .build()
         val hires = DefaultAudioSink.Builder(context)
-            .setAudioProcessors(arrayOf(SoundEngine(forUsb = false)))
+            .setAudioProcessors(arrayOf(AppResampler(context, floatSink = true, engine = engineHires), engineHires))
             .setEnableFloatOutput(true)
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .build()
@@ -121,6 +128,8 @@ object Playback {
             .build()
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && SleepTimer.onSongEnded()) return
+                ReplayGain.onTrack(current())
                 Crossfade.onNewSong(player, reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)
                 rebuildsForTrack = 0
                 current()?.let { AppState.countPlay(it); AppState.findArtNow(it) }
@@ -170,7 +179,13 @@ object Playback {
         player.shuffleModeEnabled = s.shuffle
         player.repeatMode = when (s.repeat) { 1 -> Player.REPEAT_MODE_ALL; 2 -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF }
         // Four times a second with the screen on; once a second with it off (battery).
-        scope.launch { while (true) { tick(); delay(if (Power.screenOn) 250 else 1000) } }
+        scope.launch { while (true) { tick(); SleepTimer.tick(); delay(if (Power.screenOn) 250 else 1000) } }
+        // Speed/pitch and ReplayGain follow their settings.
+        scope.launch {
+            AppState.settings.map { Triple(it.speed, it.keepPitch, it.replayGain to it.replayGainPreampDb) }.distinctUntilChanged().collect {
+                Speed.apply(); ReplayGain.onTrack(current())
+            }
+        }
     }
 
     fun current(): Track? = queue.getOrNull(player.currentMediaItemIndex)
@@ -225,6 +240,9 @@ object Playback {
     }
 
     fun jumpTo(i: Int) { if (i in queue.indices) { player.seekTo(i, 0); player.play() } }
+
+    /** The sleep timer ran out: pause, and put the volume back for next time. */
+    fun pauseForTimer() { main.post { player.pause(); Dvc.applyNow() } }
 
     fun toggle() {
         if (player.playbackState == Player.STATE_IDLE) player.prepare()

@@ -418,6 +418,27 @@ fun SettingsScreen(nav: Nav) {
             item { LockScreenRow(s.lockScreen) }
             item {
                 Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("ReplayGain", style = body(14.sp, FontWeight.Bold))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("off" to "Off", "track" to "Per song", "album" to "Per album").forEach { (k, label) -> Chip(label, s.replayGain == k) { AppState.update { it.copy(replayGain = k) } } }
+                    }
+                    if (s.replayGain != "off") Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Pre-amp ${"%+.0f".format(s.replayGainPreampDb)} dB", style = body(13.sp), modifier = Modifier.weight(1f))
+                        RoundButton(I.Minus, "Pre-amp down", { AppState.update { it.copy(replayGainPreampDb = (it.replayGainPreampDb - 1).coerceAtLeast(-15.0)) } }, 36.dp)
+                        Spacer(Modifier.width(8.dp))
+                        RoundButton(I.Plus, "Pre-amp up", { AppState.update { it.copy(replayGainPreampDb = (it.replayGainPreampDb + 1).coerceAtMost(6.0)) } }, 36.dp)
+                    }
+                    Text("Plays songs (or whole albums) at the same loudness, from the ReplayGain values in their tags. Only turns down, never past a song's peak.", style = body(12.sp, color = C.TextMid))
+                }
+            }
+            item { SettingRow("Resume with headphones", "Start again when headphones or Bluetooth reconnect within 30 minutes of being unplugged") { Toggle(s.autoResume, "Resume with headphones") { v -> AppState.update { it.copy(autoResume = v) } } } }
+            item {
+                SettingRow("App resampler", if (s.appResampler) "Songs are converted to the phone's ${AudioPathInfo.mixerRate(androidx.compose.ui.platform.LocalContext.current) / 1000} kHz in the app (48-tap sinc, 64-bit), so Android does not resample" else "Use the app's high-quality converter instead of Android's when a song's rate differs from the phone's") {
+                    Toggle(s.appResampler, "App resampler") { v -> AppState.update { it.copy(appResampler = v) }; Playback.rebuildAudio("app resampler") }
+                }
+            }
+            item {
+                Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Notification player", style = body(14.sp, FontWeight.Bold))
                     Text("Second line", style = body(12.sp, FontWeight.Bold, C.TextMid))
                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

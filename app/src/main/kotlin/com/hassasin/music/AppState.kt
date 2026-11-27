@@ -1,5 +1,7 @@
 package com.hassasin.music
 
+import kotlinx.coroutines.flow.distinctUntilChanged
+
 import android.app.Application
 import android.app.PendingIntent
 import android.content.Context
@@ -46,6 +48,7 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         Playback.init(this)
         LockScreen.register(this)
+        AutoResume.register(this)
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -88,6 +91,14 @@ class PlaybackService : MediaSessionService() {
         }
         // The second line: quality and output, or the lyric being sung.
         NotifUpdater.start(this, scope, np)
+        // The home-screen widget follows the song, play state and cover.
+        scope.launch {
+            kotlinx.coroutines.flow.combine(Playback.state, androidx.compose.runtime.snapshotFlow { ArtRepo.version }) { st, _ -> st.current?.id to st.playing }
+                .distinctUntilChanged().collect {
+                    val art = Playback.state.value.current?.let { t -> ArtProvider.bitmapFor(t.id)?.let { b -> android.graphics.Bitmap.createScaledBitmap(b, 256, 256, true) } }
+                    PlayerWidget.update(this@PlaybackService, art)
+                }
+        }
     }
 
     private fun loved(t: Track) = (AppState.stats.value[t.id]?.rating ?: 0) >= 5

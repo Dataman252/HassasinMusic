@@ -99,6 +99,9 @@ sealed class Route {
     data object Settings : Route()
     data object Folders : Route()
     data object Credits : Route()
+    data object Playlists : Route()
+    data class PlaylistDetail(val id: Long) : Route()
+    data class EditTags(val trackId: Long) : Route()
 }
 
 /** Routes shown as a sheet sliding up over the screen below. */
@@ -255,6 +258,9 @@ class MainActivity : ComponentActivity() {
                                     Route.Settings -> SettingsScreen(nav)
                                     Route.Folders -> FoldersScreen(nav)
                                     Route.Credits -> CreditsScreen(nav)
+                                    Route.Playlists -> PlaylistsScreen(nav)
+                                    is Route.PlaylistDetail -> PlaylistScreen(nav, r.id)
+                                    is Route.EditTags -> TagEditorScreen(nav, r.trackId)
                                     else -> LibraryHub(nav)
                                 }
                             }
@@ -267,6 +273,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     SheetHost(nav)
+                    WhatsNew()
                     VolumeHud(volumeShownAt)
                     DonatePrompt()
                 }
@@ -358,6 +365,32 @@ private fun VolumeHud(shownAt: Long) {
                     Text("DAC ${"%.1f".format(s.dacVolumeDb)} dB", style = mono(14.sp, FontWeight.Bold, C.AmberLight))
                     if (s.dacVolumeDb >= s.dacMaxDb) Text("  · at your limit", style = body(12.sp, color = C.Limit))
                 }
+            }
+        }
+    }
+}
+
+/** Once after each update: what changed in this version. */
+@Composable
+private fun WhatsNew() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var notes by remember { mutableStateOf(Changelog.pending(context)) }
+    val n = notes ?: return
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { notes = null }, contentAlignment = Alignment.Center) {
+        Column(Modifier.padding(24.dp).fillMaxWidth().raised(RoundedCornerShape(24.dp)).padding(22.dp)) {
+            Text("What's new", style = display(22.sp))
+            Text("Hassasin Music ${n.first}", style = mono(12.sp, color = C.AmberText))
+            Spacer(Modifier.height(12.dp))
+            n.second.forEach { line ->
+                Row(Modifier.padding(vertical = 4.dp)) {
+                    Box(Modifier.padding(top = 7.dp).size(6.dp).background(C.Amber, RoundedCornerShape(3.dp)))
+                    Spacer(Modifier.width(10.dp))
+                    Text(line, style = body(14.sp).copy(lineHeight = 20.sp))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Box(Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(C.Amber).clickable { notes = null }, contentAlignment = Alignment.Center) {
+                Text("Got it", style = body(15.sp, FontWeight.Bold, C.OnAccent))
             }
         }
     }

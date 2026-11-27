@@ -41,7 +41,7 @@ object Crossfade {
 
     /** Sets the player's volume from the fade and the app volume. */
     fun apply(player: ExoPlayer) {
-        val v = (fade * Dvc.gain()).coerceIn(0f, 1f)
+        val v = (fade * Dvc.gain() * ReplayGain.gain() * SleepTimer.fade()).coerceIn(0f, 1f)
         if (kotlin.math.abs(player.volume - v) > 1e-4f) player.volume = v
     }
 

@@ -89,6 +89,15 @@ fun CreditsScreen(nav: Nav) {
                     }
                 }
             }
+            item { Text("WHAT'S NEW", style = eyebrow(), modifier = Modifier.padding(start = 4.dp, top = 6.dp)) }
+            item {
+                Column(Modifier.fillMaxWidth().raised().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Changelog.NOTES.forEach { (v, notes) ->
+                        Text("Version $v", style = body(14.sp, FontWeight.Bold, C.AmberText), modifier = Modifier.padding(top = 8.dp))
+                        notes.forEach { n -> Text("• $n", style = body(12.sp, color = C.TextMid).copy(lineHeight = 17.sp)) }
+                    }
+                }
+            }
             CREDITS.forEach { (section, list) ->
                 item { Text(section, style = eyebrow(), modifier = Modifier.padding(start = 4.dp, top = 6.dp)) }
                 item {

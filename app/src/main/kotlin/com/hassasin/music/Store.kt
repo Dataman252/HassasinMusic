@@ -39,6 +39,18 @@ data class AppSettings(
     val crossfadeSec: Int = 0,
     /** Direct Volume Control: the app applies the volume (64-bit); Android's media volume stays at maximum. */
     val dvc: Boolean = false,
+    /** ReplayGain: "off", "track" or "album". */
+    val replayGain: String = "off",
+    val replayGainPreampDb: Double = 0.0,
+    /** Gain for songs without ReplayGain tags (≤ 0 dB). */
+    val replayGainMissingDb: Double = 0.0,
+    /** Playback speed (Android output only) and whether the pitch stays the same. */
+    val speed: Float = 1f,
+    val keepPitch: Boolean = true,
+    /** Start again when headphones reconnect after being unplugged. */
+    val autoResume: Boolean = true,
+    /** Convert songs to the phone's mixer rate in the app (high-quality sinc) instead of Android's resampler. */
+    val appResampler: Boolean = false,
     /** App volume step 0..30 (2 dB each, 30 = 0 dB). */
     val dvcStep: Int = 20,
     /** How the cover changes with the song: "slide", "fade", "zoom", "flip". */

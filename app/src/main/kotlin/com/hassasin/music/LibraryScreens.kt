@@ -64,7 +64,9 @@ fun songActions(nav: Nav, t: Track): List<MenuAction> = listOf(
     MenuAction("Go to album") { nav.go(Route.AlbumDetail(t.albumKey)) },
     MenuAction("Go to artist") { nav.go(Route.Tracks(LyricsRepo.mainArtist(t.artist), "artist", LyricsRepo.mainArtist(t.artist))) },
     MenuAction("Fix album art") { nav.go(Route.FixArt(albumOf(t)?.key ?: t.albumKey)) },
-)
+    MenuAction("Edit tags") { nav.go(Route.EditTags(t.id)) },
+    MenuAction("New playlist with this song") { Playlists.create(t.title, listOf(t)) },
+) + Playlists.list().take(6).map { p -> MenuAction("Add to \u201C${p.name}\u201D") { Playlists.add(p.id, listOf(t)) } }
 
 private data class Tile(val label: String, val count: String, val icon: String, val route: Route, val hot: Boolean = false)
 
@@ -346,7 +348,7 @@ private data class LibTab(val label: String, val icon: String, val kind: String)
 private val LIB_TABS = listOf(
     LibTab("All songs", I.Note, "all"), LibTab("Recently added", I.Plus, "recent"), LibTab("Recently played", I.Clock, "played"),
     LibTab("Most played", I.Chart, "most"), LibTab("Hi-Res", I.HiRes, "hires"), LibTab("Albums", I.Album, "albums"),
-    LibTab("Artists", I.Artist, "artists"), LibTab("Folders", I.Folder, "folders"), LibTab("Top rated", I.Star, "top"),
+    LibTab("Artists", I.Artist, "artists"), LibTab("Playlists", I.Playlist, "playlists"), LibTab("Folders", I.Folder, "folders"), LibTab("Top rated", I.Star, "top"),
 )
 
 /**
@@ -415,6 +417,7 @@ fun LibraryHub(nav: Nav) {
                 label = "library tab",
             ) { tab ->
                 when (LIB_TABS[tab].kind) {
+                    "playlists" -> PlaylistsList(nav)
                     "albums" -> LazyVerticalGrid(
                         GridCells.Adaptive(150.dp), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp),
