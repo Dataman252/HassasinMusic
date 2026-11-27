@@ -103,13 +103,15 @@ object LockScreen {
         val app = context.applicationContext
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
+                if (intent.action == Intent.ACTION_SCREEN_ON) { Power.screenOn = true; return }
                 if (intent.action != Intent.ACTION_SCREEN_OFF) return
+                Power.screenOn = false
                 val playing = runCatching { Playback.player.isPlaying }.getOrDefault(false)
                 if (!playing) { showing?.get()?.finish(); return }
                 if (AppState.settings.value.lockScreen && showing?.get() == null) show(app)
             }
         }
-        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_SCREEN_ON) }
         if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED) else app.registerReceiver(receiver, filter)
     }
 

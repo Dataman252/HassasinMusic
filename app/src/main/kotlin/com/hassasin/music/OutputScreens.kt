@@ -101,6 +101,7 @@ fun OutputScreen(nav: Nav, sheet: Boolean = false) {
             }
             item {
                 Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutputChainCard()
                     Text("OUTPUT", style = eyebrow())
                     Outputs.shown().filter { !it.more }.forEach { m -> OutputChoice(m, s.output == m.key) { Playback.setOutput(m.key) } }
                     var more by remember { mutableStateOf(Outputs.of(s.output).more) }
@@ -405,6 +406,14 @@ fun SettingsScreen(nav: Nav) {
                     Spacer(Modifier.height(6.dp))
                     CoverSharpness(s.artSharpness)
                 }
+            }
+            item {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                SettingRow(
+                    "Direct Volume Control (DVC)",
+                    if (s.dvc) "The app sets the volume in 64-bit; Android's media volume stays at maximum. Volume keys: ${Dvc.label()}"
+                    else "Let the app control the volume in 64-bit instead of Android (cleaner, more EQ headroom)",
+                ) { Toggle(s.dvc, "Direct Volume Control") { v -> Dvc.enable(ctx, v) } }
             }
             item { LockScreenRow(s.lockScreen) }
             item {

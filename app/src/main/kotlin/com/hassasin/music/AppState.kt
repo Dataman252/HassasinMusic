@@ -54,6 +54,7 @@ class PlaybackService : MediaSessionService() {
             androidx.media3.session.DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_stat_hassasin) },
         )
         val np = NotifPlayer(Playback.player)
+        Playback.dvcListener = { np.dvcChanged() }
         val s = MediaSession.Builder(this, np)
             .setSessionActivity(open)
             .setBitmapLoader(ArtBitmapLoader(this))

@@ -345,7 +345,8 @@ object Viz {
 
     /** Mono samples (−1..1) that will be heard after [delayMs]. */
     fun push(samples: FloatArray, count: Int, rate: Int, delayMs: Long) {
-        if (!enabled || !playing) return
+        // Screen off: nobody sees the visualizer, so its work is skipped (battery).
+        if (!enabled || !playing || !Power.screenOn) return
         var i = 0
         while (i < count) {
             ring[fill++] = samples[i++]

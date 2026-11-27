@@ -126,7 +126,14 @@ struct Engine {
     Resampler rs;
     int inRate = 48000;
     std::vector<int32_t> scratch;
+    // App volume (DVC): Q30 fixed point, 1<<30 = unchanged. Applied in 64-bit before the output format.
+    std::atomic<int64_t> gainQ{(int64_t) 1 << 30};
 };
+
+static inline int32_t applyGain(int32_t x, int64_t g) {
+    if (g == ((int64_t) 1 << 30)) return x;
+    return (int32_t) (((int64_t) x * g) >> 30);
+}
 
 aaudio_data_callback_result_t onData(AAudioStream*, void* user, void* audio, int32_t frames) {
     auto* e = (Engine*) user;
@@ -134,6 +141,7 @@ aaudio_data_callback_result_t onData(AAudioStream*, void* user, void* audio, int
     uint64_t w = e->writePos.load(std::memory_order_acquire);
     uint64_t avail = w - r;
     size_t take = 0;
+    const int64_t g = e->gainQ.load();
     if (!e->paused.load()) {
         take = (size_t) std::min<uint64_t>(avail, (uint64_t) frames);
         if (take < (size_t) frames && avail == 0 && e->played.load() > 0) e->underruns++;
@@ -142,8 +150,8 @@ aaudio_data_callback_result_t onData(AAudioStream*, void* user, void* audio, int
         auto* out = (int32_t*) audio;
         for (size_t i = 0; i < take; i++) {
             size_t idx = (size_t) ((r + i) % e->capacity) * 2;
-            out[2 * i] = e->ring[idx];
-            out[2 * i + 1] = e->ring[idx + 1];
+            out[2 * i] = applyGain(e->ring[idx], g);
+            out[2 * i + 1] = applyGain(e->ring[idx + 1], g);
         }
         memset(out + take * 2, 0, (frames - take) * 2 * sizeof(int32_t));
     } else if (e->format == AAUDIO_FORMAT_PCM_I16) {
@@ -152,7 +160,7 @@ aaudio_data_callback_result_t onData(AAudioStream*, void* user, void* audio, int
         static uint32_t seed = 22222;
         for (size_t i = 0; i < take * 2; i++) {
             size_t idx = (size_t) ((r + i / 2) % e->capacity) * 2 + (i & 1);
-            int64_t v = e->ring[idx];
+            int64_t v = applyGain(e->ring[idx], g);
             seed = seed * 1664525u + 1013904223u; int32_t d1 = (int32_t) (seed >> 16) & 0xFFFF;
             seed = seed * 1664525u + 1013904223u; int32_t d2 = (int32_t) (seed >> 16) & 0xFFFF;
             v += (int64_t) (d1 - d2);
@@ -164,7 +172,7 @@ aaudio_data_callback_result_t onData(AAudioStream*, void* user, void* audio, int
         auto* out = (uint8_t*) audio;
         for (size_t i = 0; i < take * 2; i++) {
             size_t idx = (size_t) ((r + i / 2) % e->capacity) * 2 + (i & 1);
-            int32_t v = e->ring[idx] >> 8;
+            int32_t v = applyGain(e->ring[idx], g) >> 8;
             out[3 * i] = (uint8_t) v; out[3 * i + 1] = (uint8_t) (v >> 8); out[3 * i + 2] = (uint8_t) (v >> 16);
         }
         memset(out + take * 6, 0, (frames - take) * 6);
@@ -172,8 +180,8 @@ aaudio_data_callback_result_t onData(AAudioStream*, void* user, void* audio, int
         auto* out = (float*) audio;
         for (size_t i = 0; i < take; i++) {
             size_t idx = (size_t) ((r + i) % e->capacity) * 2;
-            out[2 * i] = (float) (e->ring[idx] / 2147483648.0);
-            out[2 * i + 1] = (float) (e->ring[idx + 1] / 2147483648.0);
+            out[2 * i] = (float) (applyGain(e->ring[idx], g) / 2147483648.0);
+            out[2 * i + 1] = (float) (applyGain(e->ring[idx + 1], g) / 2147483648.0);
         }
         memset(out + take * 2, 0, (frames - take) * 2 * sizeof(float));
     }
@@ -275,6 +283,12 @@ Java_com_hassasin_music_PhoneDirectNative_open(JNIEnv*, jclass, jint bufferMs, j
     if (AAudioStream_requestStart(e->stream) != AAUDIO_OK) { AAudioStream_close(e->stream); delete e; return 0; }
     e->running = true;
     return (jlong) e;
+}
+
+JNIEXPORT void JNICALL
+Java_com_hassasin_music_PhoneDirectNative_setGain(JNIEnv*, jclass, jlong h, jdouble linear) {
+    double l = linear < 0 ? 0 : (linear > 1 ? 1 : linear);
+    ((Engine*) h)->gainQ.store((int64_t) (l * (double) ((int64_t) 1 << 30)));
 }
 
 JNIEXPORT jint JNICALL

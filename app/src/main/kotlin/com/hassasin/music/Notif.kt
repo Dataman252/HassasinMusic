@@ -70,6 +70,38 @@ class NotifPlayer(player: Player) : ForwardingPlayer(player) {
         return b.build()
     }
 
+    // DVC: the session reports a volume the app controls, so the phone's volume keys and slider move
+    // the app volume (also with the screen off) while Android's own media volume stays at maximum.
+    override fun getDeviceInfo(): androidx.media3.common.DeviceInfo =
+        if (Dvc.on()) androidx.media3.common.DeviceInfo.Builder(androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE).setMinVolume(0).setMaxVolume(Dvc.STEPS).build()
+        else super.getDeviceInfo()
+    override fun getDeviceVolume(): Int = if (Dvc.on()) Dvc.step() else super.getDeviceVolume()
+    override fun isDeviceMuted(): Boolean = if (Dvc.on()) Dvc.step() == 0 else super.isDeviceMuted()
+    override fun setDeviceVolume(volume: Int, flags: Int) { if (Dvc.on()) Dvc.setStep(volume) else super.setDeviceVolume(volume, flags) }
+    @Deprecated("Deprecated in Java") override fun setDeviceVolume(volume: Int) { if (Dvc.on()) Dvc.setStep(volume) else @Suppress("DEPRECATION") super.setDeviceVolume(volume) }
+    override fun increaseDeviceVolume(flags: Int) { if (Dvc.on()) Dvc.setStep(Dvc.step() + 1) else super.increaseDeviceVolume(flags) }
+    override fun decreaseDeviceVolume(flags: Int) { if (Dvc.on()) Dvc.setStep(Dvc.step() - 1) else super.decreaseDeviceVolume(flags) }
+    @Deprecated("Deprecated in Java") override fun increaseDeviceVolume() { if (Dvc.on()) Dvc.setStep(Dvc.step() + 1) else @Suppress("DEPRECATION") super.increaseDeviceVolume() }
+    @Deprecated("Deprecated in Java") override fun decreaseDeviceVolume() { if (Dvc.on()) Dvc.setStep(Dvc.step() - 1) else @Suppress("DEPRECATION") super.decreaseDeviceVolume() }
+    override fun setDeviceMuted(muted: Boolean, flags: Int) { if (Dvc.on()) Dvc.setStep(if (muted) 0 else 20) else super.setDeviceMuted(muted, flags) }
+
+    private val volumeCommands = listOf(
+        Player.COMMAND_GET_DEVICE_VOLUME, Player.COMMAND_SET_DEVICE_VOLUME, Player.COMMAND_SET_DEVICE_VOLUME_WITH_FLAGS,
+        Player.COMMAND_ADJUST_DEVICE_VOLUME, Player.COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS,
+    )
+    override fun getAvailableCommands(): Player.Commands =
+        if (Dvc.on()) super.getAvailableCommands().buildUpon().addAll(*volumeCommands.toIntArray()).build() else super.getAvailableCommands()
+    override fun isCommandAvailable(command: Int): Boolean = (Dvc.on() && command in volumeCommands) || super.isCommandAvailable(command)
+
+    /** DVC switched or moved: the session re-reads the volume and volume type. */
+    fun dvcChanged() {
+        val info = deviceInfo; val vol = deviceVolume; val muted = isDeviceMuted
+        val cmds = availableCommands
+        listeners.forEach { it.onDeviceInfoChanged(info); it.onDeviceVolumeChanged(vol, muted); it.onAvailableCommandsChanged(cmds) }
+        val events = Player.Events(androidx.media3.common.FlagSet.Builder().add(Player.EVENT_DEVICE_INFO_CHANGED).add(Player.EVENT_DEVICE_VOLUME_CHANGED).add(Player.EVENT_AVAILABLE_COMMANDS_CHANGED).build())
+        listeners.forEach { it.onEvents(this, events) }
+    }
+
     fun setLine(text: String?) {
         if (text == line) return
         line = text
@@ -109,7 +141,7 @@ object NotifUpdater {
                     else -> NotifLine.quality(t, st, s)
                 }
                 np.setLine(text)
-                delay(if (s.notifLine == "lyrics" && st.playing) 200 else 1000)
+                delay(if (s.notifLine == "lyrics" && st.playing && Power.screenOn) 200 else 1000)
             }
         }
     }

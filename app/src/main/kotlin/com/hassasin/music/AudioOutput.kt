@@ -18,32 +18,32 @@ object Outputs {
         OutputMode(
             "tuned", "Phone",
             "Android's normal output, with your phone's own sound processing. Works on speaker, wired, Bluetooth and USB.",
-            effects = true, tags = listOf("Default", "App effects"),
+            effects = true, tags = listOf("Default", "App effects", "Battery: low"),
         ),
         OutputMode(
             "direct", "Direct (phone)",
             "Skips Android's mixer and the phone's sound processing: the app writes straight into the phone's audio hardware (speaker or wired).",
-            effects = true, tags = listOf("No phone processing", "App effects"),
+            effects = true, tags = listOf("No phone processing", "App effects", "Battery: medium"),
         ),
         OutputMode(
             "usb", "Untouched (USB DAC)",
             "The exact file goes to your USB DAC through the app's own driver, at the song's own rate and bit depth.",
-            effects = true, tags = listOf("Bit-perfect", "DAC volume"),
+            effects = true, tags = listOf("Bit-perfect", "DAC volume", "Battery: higher (powers the DAC)"),
         ),
         OutputMode(
             "usb_android", "Untouched (Android USB)",
             "Android's own bit-perfect USB mode: the file goes unmixed to your DAC, and Android keeps the DAC for calls and other apps.",
-            effects = false, tags = listOf("Bit-perfect", "Android 14+"),
+            effects = false, tags = listOf("Bit-perfect", "Android 14+", "Battery: higher (powers the DAC)"),
         ),
         OutputMode(
             "hires", "Hi-Res",
             "Keeps 24-bit songs at full depth on their way to Android (when app effects are off).",
-            effects = true, tags = listOf("24-bit"), more = true,
+            effects = true, tags = listOf("24-bit", "Battery: low"), more = true,
         ),
         OutputMode(
             "offload", "Battery saver",
-            "Your phone's audio chip plays the file itself. App effects pause.",
-            effects = false, tags = listOf("Lowest battery"), more = true,
+            "Your phone's audio chip plays the file itself (MP3, AAC and, where the phone supports it, FLAC), at its own rate. App effects pause.",
+            effects = false, tags = listOf("Battery: lowest", "Native rate"), more = true,
         ),
     )
 
@@ -74,7 +74,7 @@ object Outputs {
             "hires" -> "On this phone: the mixer runs at $mixer, so you may hear little or no difference."
             "offload" -> offloadCodecs(context).let { c ->
                 if (c.isEmpty()) "On this phone: not available; plays as Phone."
-                else "On this phone: works for ${c.joinToString(" and ")} files. Other files (like FLAC) play as Phone."
+                else "On this phone: works for ${c.joinToString(" and ")} files.${if ("FLAC" !in c) " FLAC files play as Phone." else ""}"
             }
             "direct" -> "On this phone: the hardware runs at $mixer. Songs at that rate arrive untouched; others are converted by the app's own high-quality converter. Not for Bluetooth."
             "usb_android" -> when (val d = AndroidBitPerfect.describe(context)) {

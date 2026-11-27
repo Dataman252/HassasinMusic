@@ -36,6 +36,7 @@ interface DirectOut {
 object PhoneDirectNative {
     init { System.loadLibrary("usbaudio") }
     @JvmStatic external fun open(bufferMs: Int, allowShared: Boolean): Long
+    @JvmStatic external fun setGain(h: Long, linear: Double)
     @JvmStatic external fun hwRate(h: Long): Int
     @JvmStatic external fun hwBits(h: Long): Int
     @JvmStatic external fun exclusive(h: Long): Boolean
@@ -109,7 +110,12 @@ class PhoneDirectSession private constructor(private val handle: Long) : DirectO
     override fun isRunning() = !closed && PhoneDirectNative.isRunning(handle)
     override fun setPaused(p: Boolean) { if (!closed) PhoneDirectNative.setPaused(handle, p) }
     override fun flush() { if (!closed) PhoneDirectNative.flush(handle) }
-    override fun setVolumeDb(db: Double): Double? = null
+    /** App volume (DVC) on the phone's direct output: applied in 64-bit inside the engine. */
+    override fun setVolumeDb(db: Double): Double? {
+        if (closed) return null
+        PhoneDirectNative.setGain(handle, Math.pow(10.0, db / 20.0))
+        return db
+    }
     override fun close() {
         if (closed) return
         closed = true

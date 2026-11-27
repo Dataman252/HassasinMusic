@@ -175,6 +175,14 @@ class MainActivity : ComponentActivity() {
             }
             return true
         }
+        // DVC: the volume keys move the app's own volume (Android's stays at maximum).
+        if (Dvc.on() && (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                Dvc.setStep(Dvc.step() + if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) 1 else -1)
+                volumeShownAt = System.currentTimeMillis()
+            }
+            return true
+        }
         return super.dispatchKeyEvent(event)
     }
 
@@ -336,10 +344,20 @@ private fun VolumeHud(shownAt: Long) {
     Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 16.dp), contentAlignment = Alignment.TopCenter) {
         AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
             Row(Modifier.glass(RoundedCornerShape(22.dp)).padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Ico(I.Plug, C.AmberText, 16.dp)
-                Spacer(Modifier.width(8.dp))
-                Text("DAC ${"%.1f".format(s.dacVolumeDb)} dB", style = mono(14.sp, FontWeight.Bold, C.AmberLight))
-                if (s.dacVolumeDb >= s.dacMaxDb) Text("  · at your limit", style = body(12.sp, color = C.Limit))
+                if (Dvc.on()) {
+                    Text("Volume", style = body(13.sp, FontWeight.Bold, C.TextHi))
+                    Spacer(Modifier.width(10.dp))
+                    Box(Modifier.width(120.dp).height(6.dp).background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(3.dp))) {
+                        Box(Modifier.fillMaxWidth(s.dvcStep / Dvc.STEPS.toFloat()).height(6.dp).background(C.Amber, RoundedCornerShape(3.dp)))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(Dvc.label(), style = mono(13.sp, FontWeight.Bold, C.AmberLight))
+                } else {
+                    Ico(I.Plug, C.AmberText, 16.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("DAC ${"%.1f".format(s.dacVolumeDb)} dB", style = mono(14.sp, FontWeight.Bold, C.AmberLight))
+                    if (s.dacVolumeDb >= s.dacMaxDb) Text("  · at your limit", style = body(12.sp, color = C.Limit))
+                }
             }
         }
     }

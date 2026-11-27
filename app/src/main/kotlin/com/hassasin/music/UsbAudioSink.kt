@@ -435,7 +435,9 @@ class UsbAudioSink(
 
     // The DAC's own volume is the master volume; the player's volume would scale the samples.
     override fun setVolume(volume: Float) {
-        if (!usb) super.setVolume(volume)
+        if (!usb) return super.setVolume(volume)
+        // The phone's own direct output has no Android volume: the app's volume (DVC, fades) is applied in its engine.
+        if (session?.kind == "phone") session?.setVolumeDb(20 * kotlin.math.log10(volume.coerceAtLeast(1e-6f).toDouble()))
     }
 
     override fun reset() {

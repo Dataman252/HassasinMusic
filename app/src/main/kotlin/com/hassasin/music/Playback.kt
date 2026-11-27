@@ -72,11 +72,12 @@ private class MusicRenderersFactory(context: Context) : DefaultRenderersFactory(
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .build()
         val android = DualSink.create(tuned, hires)
-        return UsbAudioSink(context, android, SoundEngine(forUsb = true)) {
+        // Outermost: FLAC straight to the phone's audio chip in Battery saver (see FlacOffloadSink).
+        return FlacOffloadSink(UsbAudioSink(context, android, SoundEngine(forUsb = true)) {
             val s = AppState.settings.value
             // During a call the DAC belongs to Android, so the call uses your earphones and the DAC's microphone.
             UsbOutputSettings(enabled = s.output == "usb" && !Playback.callActive, phoneDirect = s.output == "direct" && !Playback.callActive, volumeDb = s.dacVolumeDb, maxDb = s.dacMaxDb)
-        }
+        })
     }
 }
 
@@ -168,7 +169,8 @@ object Playback {
         applyOffload(s.output)
         player.shuffleModeEnabled = s.shuffle
         player.repeatMode = when (s.repeat) { 1 -> Player.REPEAT_MODE_ALL; 2 -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF }
-        scope.launch { while (true) { tick(); delay(250) } }
+        // Four times a second with the screen on; once a second with it off (battery).
+        scope.launch { while (true) { tick(); delay(if (Power.screenOn) 250 else 1000) } }
     }
 
     fun current(): Track? = queue.getOrNull(player.currentMediaItemIndex)
@@ -236,6 +238,12 @@ object Playback {
 
     fun seekTo(ms: Long) = player.seekTo(ms)
 
+    fun isReady() = ::player.isInitialized
+    fun main(block: () -> Unit) { main.post(block) }
+    /** Told when the app volume (DVC) changes, so the media session can show it. */
+    @Volatile var dvcListener: (() -> Unit)? = null
+    fun onDvcChanged() { main.post { dvcListener?.invoke() } }
+
     /** The exact playing position right now (the state's position is updated a few times a second). */
     fun positionNow(): Long = player.currentPosition
 
@@ -281,6 +289,9 @@ object Playback {
         applyOffload(mode)
         if (mode == "usb") onDacMaybeChanged() else rebuildAudio("output: $mode")
     }
+
+    /** Same as [rebuildAudio], from the audio thread (posted to the main thread). */
+    fun rebuildAudioLater(why: String) { main.post { rebuildAudio(why) } }
 
     fun rebuildAudio(why: String) {
         if (!::player.isInitialized || player.mediaItemCount == 0) return

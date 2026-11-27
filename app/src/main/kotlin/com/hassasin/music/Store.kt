@@ -37,6 +37,10 @@ data class AppSettings(
     val lockScreen: Boolean = true,
     /** Seconds the end of a song fades out and the next fades in (0 = off). Songs of one album stay gapless. */
     val crossfadeSec: Int = 0,
+    /** Direct Volume Control: the app applies the volume (64-bit); Android's media volume stays at maximum. */
+    val dvc: Boolean = false,
+    /** App volume step 0..30 (2 dB each, 30 = 0 dB). */
+    val dvcStep: Int = 20,
     /** How the cover changes with the song: "slide", "fade", "zoom", "flip". */
     val coverAnim: String = "slide",
     /** Second line of the notification card: "quality" (artist · format · output), "lyrics" (the line sung now), "artist". */
