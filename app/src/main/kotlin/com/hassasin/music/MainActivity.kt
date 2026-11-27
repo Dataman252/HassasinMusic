@@ -101,6 +101,7 @@ sealed class Route {
     data object Credits : Route()
     data object Playlists : Route()
     data object GeneratePlaylist : Route()
+    data class AddSongs(val playlistId: Long) : Route()
     data class SettingsPage(val key: String) : Route()
     data class PlaylistDetail(val id: Long) : Route()
     data class EditTags(val trackId: Long) : Route()
@@ -264,6 +265,7 @@ class MainActivity : ComponentActivity() {
                                     Route.Credits -> CreditsScreen(nav)
                                     Route.Playlists -> PlaylistsScreen(nav)
                                     Route.GeneratePlaylist -> GeneratorScreen(nav)
+                                    is Route.AddSongs -> AddSongsScreen(nav, r.playlistId)
                                     is Route.SettingsPage -> SettingsPageScreen(nav, r.key)
                                     is Route.PlaylistDetail -> PlaylistScreen(nav, r.id)
                                     is Route.EditTags -> TagEditorScreen(nav, r.trackId)
@@ -280,6 +282,7 @@ class MainActivity : ComponentActivity() {
                     }
                     SheetHost(nav)
                     WhatsNew()
+                    AddToPlaylistDialog()
                     VolumeHud(volumeShownAt)
                     DonatePrompt()
                 }

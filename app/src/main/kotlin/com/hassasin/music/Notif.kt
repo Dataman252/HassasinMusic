@@ -132,7 +132,8 @@ object NotifUpdater {
                     lines = runCatching { LyricsRepo.find(context, t, online = false)?.synced }.getOrNull()
                 }
                 val text = when (s.notifLine) {
-                    "artist" -> null
+                    // The song's own metadata may lack the artist, so it is always sent.
+                    "artist" -> t.artist.ifBlank { t.albumArtist }.ifBlank { t.album }
                     "lyrics" -> lines?.let { ls ->
                         val pos = Playback.positionNow() + LyricsRepo.offsetMs(t)
                         ls.lastOrNull { it.timeMs <= pos }?.text?.takeIf { it.isNotBlank() }

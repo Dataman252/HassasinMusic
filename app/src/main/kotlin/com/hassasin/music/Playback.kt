@@ -132,7 +132,9 @@ object Playback {
                 ReplayGain.onTrack(current())
                 Crossfade.onNewSong(player, reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)
                 rebuildsForTrack = 0
-                current()?.let { AppState.countPlay(it); AppState.findArtNow(it) }
+                // A play counts only after 30 s of listening (PlayCounter); a repeat starts afresh.
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) PlayCounter.restart()
+                current()?.let { AppState.findArtNow(it) }
                 AppState.fetchLyricsNow(listOfNotNull(current(), queue.getOrNull(player.nextMediaItemIndex)))
                 publish()
                 saveResume()
@@ -180,7 +182,7 @@ object Playback {
         player.shuffleModeEnabled = s.shuffle
         player.repeatMode = when (s.repeat) { 1 -> Player.REPEAT_MODE_ALL; 2 -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF }
         // Four times a second with the screen on; once a second with it off (battery).
-        scope.launch { while (true) { tick(); SleepTimer.tick(); delay(if (Power.screenOn) 250 else 1000) } }
+        scope.launch { while (true) { tick(); SleepTimer.tick(); PlayCounter.tick(current(), player.isPlaying); delay(if (Power.screenOn) 250 else 1000) } }
         scope.launch { while (true) { delay(1000); if (player.isPlaying) Reports.onPlaybackSecond(appContext) } }
         // Speed/pitch and ReplayGain follow their settings.
         scope.launch {

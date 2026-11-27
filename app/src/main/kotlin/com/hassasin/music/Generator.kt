@@ -46,6 +46,8 @@ data class GenRules(
     val minRating: Int = 0,
     /** "any", "never" (never played), "often" (3+ plays), "forgotten" (not played for 60 days) */
     val plays: String = "any",
+    /** Played at least this many times (counted after 30 s each). */
+    val minPlays: Int = 0,
     /** Added in the last N days (0 = any time). */
     val addedDays: Int = 0,
     /** How many songs (0 = all that match). */
@@ -66,7 +68,7 @@ object Generator {
                 (r.genres.isEmpty() || t.genre in r.genres) &&
                 (r.yearFrom == 0 || t.year >= r.yearFrom) && (r.yearTo == 0 || (t.year in 1..r.yearTo)) &&
                 when (r.quality) { "hires" -> t.hiRes; "lossless" -> t.ext in lossless || t.hiRes; else -> true } &&
-                st.rating >= r.minRating &&
+                st.rating >= r.minRating && st.plays >= r.minPlays &&
                 when (r.plays) {
                     "never" -> st.plays == 0
                     "often" -> st.plays >= 3
@@ -81,6 +83,7 @@ object Generator {
         val m = matches(lib, stats, r)
         val ordered = when (r.order) {
             "most" -> m.sortedByDescending { stats[it.id]?.plays ?: 0 }
+            "listened" -> m.sortedByDescending { stats[it.id]?.listenedSec ?: 0 }
             "newest" -> m.sortedByDescending { it.dateAdded }
             "oldest" -> m.sortedBy { if (it.year > 0) it.year else 9999 }
             "mix" -> artistMix(m.shuffled())
@@ -108,6 +111,7 @@ object Generator {
         "Hi-Res mix" to GenRules(quality = "hires", order = "mix"),
         "Fresh (added this month)" to GenRules(addedDays = 30, count = 0, order = "newest"),
         "Most played" to GenRules(plays = "often", order = "most"),
+        "Most listened time" to GenRules(minPlays = 1, order = "listened"),
         "Forgotten gems" to GenRules(plays = "forgotten", order = "mix"),
         "Throwback (before 2005)" to GenRules(yearFrom = 1950, yearTo = 2004, order = "mix"),
         current?.let { "More like this artist" to GenRules(artists = setOf(LyricsRepo.mainArtist(it.artist)), count = 0, order = "shuffle") },
@@ -120,6 +124,7 @@ object Generator {
         if (r.yearFrom > 0 || r.yearTo > 0) add("${if (r.yearFrom > 0) r.yearFrom else "…"}–${if (r.yearTo > 0) r.yearTo else "…"}")
         if (r.quality == "hires") add("Hi-Res") else if (r.quality == "lossless") add("Lossless")
         if (r.minRating > 0) add("${r.minRating}★+")
+        if (r.minPlays > 0) add("played ${r.minPlays}+")
         when (r.plays) { "never" -> add("Unplayed"); "often" -> add("Most played"); "forgotten" -> add("Forgotten") }
         if (r.addedDays > 0) add("Added ${r.addedDays} days")
     }.joinToString(" · ").ifBlank { "Mix" }
@@ -192,6 +197,9 @@ fun GeneratorScreen(nav: Nav) {
                         listOf("any" to "Any plays", "never" to "Never played", "often" to "Played often", "forgotten" to "Not for 60 days").forEach { (k, l) -> Chip(l, r.plays == k) { r = r.copy(plays = k) } }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(0, 1, 5, 10, 25).forEach { n -> Chip(if (n == 0) "Any count" else "Played $n+", r.minPlays == n) { r = r.copy(minPlays = n) } }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(0 to "Added any time", 7 to "This week", 30 to "This month", 365 to "This year").forEach { (d, l) -> Chip(l, r.addedDays == d) { r = r.copy(addedDays = d) } }
                     }
                 }
@@ -202,7 +210,7 @@ fun GeneratorScreen(nav: Nav) {
                         listOf(25, 50, 100, 0).forEach { n -> Chip(if (n == 0) "All" else "$n songs", r.count == n) { r = r.copy(count = n) } }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("mix" to "Artist mix", "shuffle" to "Shuffle", "most" to "Most played", "newest" to "Newest added", "oldest" to "By year").forEach { (k, l) -> Chip(l, r.order == k) { r = r.copy(order = k) } }
+                        listOf("mix" to "Artist mix", "shuffle" to "Shuffle", "most" to "Most played", "listened" to "Most listened", "newest" to "Newest added", "oldest" to "By year").forEach { (k, l) -> Chip(l, r.order == k) { r = r.copy(order = k) } }
                     }
                 }
             }

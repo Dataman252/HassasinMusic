@@ -128,6 +128,13 @@ object AutoResume {
 /** What changed in each version, shown once after an update and in Credits. */
 object Changelog {
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.9.1" to listOf(
+            "Plays count only after 30 seconds of listening; every song shows its play count, playlists their total",
+            "Listening time per song; generator: 'Played 5+' rules, 'Most listened' order and preset",
+            "Add to playlist: pick a playlist or name a new one; '+ Add songs' inside a playlist",
+            "Cover changes: real crossfade (Fade), settle-in (Zoom) and two-sided Flip",
+            "Notification 'Artist only' shows the artist",
+        ),
         "0.9" to listOf(
             "Settings in sections (Look, Playback, Sound & output, Lyrics & covers, Library, Lock screen & notification, About), with search",
             "Help improve: optional anonymous reports so problems on your phone can be fixed without asking you",

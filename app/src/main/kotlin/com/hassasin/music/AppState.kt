@@ -217,6 +217,16 @@ object AppState {
         scope.launch(Dispatchers.IO) { runCatching { Store.save("stats.json", m) } }
     }
 
+    /** Adds listening time (from the play counter). */
+    fun addListening(trackId: Long, sec: Long) {
+        if (sec <= 0) return
+        val m = _stats.value.toMutableMap()
+        val old = m[trackId] ?: TrackStat()
+        m[trackId] = old.copy(listenedSec = old.listenedSec + sec)
+        _stats.value = m
+        scope.launch(Dispatchers.IO) { runCatching { Store.save("stats.json", m) } }
+    }
+
     fun rate(t: Track, stars: Int) {
         val m = _stats.value.toMutableMap()
         m[t.id] = (m[t.id] ?: TrackStat()).copy(rating = stars)

@@ -183,10 +183,13 @@ fun PlaylistScreen(nav: Nav, id: Long) {
             item { Header(p.name, { nav.back() }) }
             item {
                 Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${tracks.size} songs${if (tracks.size < p.paths.size) " (${p.paths.size - tracks.size} not in the library now)" else ""}", style = body(12.sp, color = C.TextMid))
+                    val stats by AppState.stats.collectAsState()
+                    val plays = tracks.sumOf { stats[it.id]?.plays ?: 0 }
+                    Text("${tracks.size} songs${if (tracks.size < p.paths.size) " (${p.paths.size - tracks.size} not in the library now)" else ""} · $plays plays", style = body(12.sp, color = C.TextMid))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Chip("Play", false) { if (tracks.isNotEmpty()) { Playback.playList(tracks, 0, shuffle = false); nav.go(Route.Player) } }
                         Chip("Shuffle", false) { if (tracks.isNotEmpty()) { Playback.playList(tracks, tracks.indices.random(), shuffle = true); nav.go(Route.Player) } }
+                        Chip("+ Add songs", false) { nav.go(Route.AddSongs(p.id)) }
                         Chip("Export M3U", false) { export.launch("${p.name}.m3u8") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -65,8 +65,8 @@ fun songActions(nav: Nav, t: Track): List<MenuAction> = listOf(
     MenuAction("Go to artist") { nav.go(Route.Tracks(LyricsRepo.mainArtist(t.artist), "artist", LyricsRepo.mainArtist(t.artist))) },
     MenuAction("Fix album art") { nav.go(Route.FixArt(albumOf(t)?.key ?: t.albumKey)) },
     MenuAction("Edit tags") { nav.go(Route.EditTags(t.id)) },
-    MenuAction("New playlist with this song") { Playlists.create(t.title, listOf(t)) },
-) + Playlists.list().take(6).map { p -> MenuAction("Add to \u201C${p.name}\u201D") { Playlists.add(p.id, listOf(t)) } }
+    MenuAction("Add to playlist…") { AddToPlaylist.songs = listOf(t) },
+)
 
 private data class Tile(val label: String, val count: String, val icon: String, val route: Route, val hot: Boolean = false)
 

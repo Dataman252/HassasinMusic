@@ -1,5 +1,6 @@
 package com.hassasin.music
 
+import androidx.compose.runtime.collectAsState
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -376,6 +377,9 @@ fun TrackRow(t: Track, playing: Boolean, onClick: () -> Unit, actions: List<Menu
                 Text(listOf(t.artist, fmtTime(t.durationMs)).filter { it.isNotBlank() }.joinToString(" · "), style = body(12.sp, color = C.TextMid), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+        // How many times it was played (30 s or more each).
+        val plays = AppState.stats.collectAsState().value[t.id]?.plays ?: 0
+        if (plays > 0) Text("▶ $plays", style = mono(11.sp, FontWeight.Bold, C.AmberText), modifier = Modifier.padding(start = 6.dp).semantics { contentDescription = "Played $plays times" })
         Box {
             PlainIconButton(I.More, "More for ${t.title}", { menu = true }, filled = false)
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = Color(0xFF171925)) {

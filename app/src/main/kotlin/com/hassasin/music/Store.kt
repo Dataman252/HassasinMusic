@@ -73,7 +73,7 @@ data class AppSettings(
 )
 
 @Serializable
-data class TrackStat(val plays: Int = 0, val lastPlayed: Long = 0, val rating: Int = 0)
+data class TrackStat(val plays: Int = 0, val lastPlayed: Long = 0, val rating: Int = 0, /** Seconds really listened, all plays together. */ val listenedSec: Long = 0)
 
 @Serializable
 data class Resume(val queue: List<Long> = emptyList(), val index: Int = 0, val positionMs: Long = 0)
