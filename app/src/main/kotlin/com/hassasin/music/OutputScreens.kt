@@ -392,6 +392,17 @@ fun SettingsScreen(nav: Nav) {
                     }
                     Text("Sits behind the play controls; tap or drag anywhere on it to move through the song.", style = body(12.sp, color = C.TextMid))
                     Spacer(Modifier.height(6.dp))
+                    Text("Cover on song change", style = body(14.sp, FontWeight.Bold))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("slide" to "Slide", "fade" to "Fade", "zoom" to "Zoom", "flip" to "Flip").forEach { (k, label) -> Chip(label, s.coverAnim == k) { AppState.update { it.copy(coverAnim = k) } } }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text("Crossfade between songs", style = body(14.sp, FontWeight.Bold))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0, 2, 4, 6, 8, 12).forEach { sec -> Chip(if (sec == 0) "Off" else "$sec s", s.crossfadeSec == sec) { AppState.update { it.copy(crossfadeSec = sec) } } }
+                    }
+                    Text("The end of a song fades out and the next fades in. Songs from one album play straight on. Not applied in bit-perfect USB mode.", style = body(12.sp, color = C.TextMid))
+                    Spacer(Modifier.height(6.dp))
                     CoverSharpness(s.artSharpness)
                 }
             }

@@ -120,6 +120,7 @@ object Playback {
             .build()
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                Crossfade.onNewSong(player, reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)
                 rebuildsForTrack = 0
                 current()?.let { AppState.countPlay(it); AppState.findArtNow(it) }
                 AppState.fetchLyricsNow(listOfNotNull(current(), queue.getOrNull(player.nextMediaItemIndex)))
@@ -344,6 +345,7 @@ object Playback {
     private fun tick() {
         if (!::player.isInitialized) return
         tickCount++
+        Crossfade.tick(player)
         watchCalls()
         if (tickCount % 4 == 0) checkDac()
         // An effect switched on or off: the engine has to be added to or taken out of the chain.

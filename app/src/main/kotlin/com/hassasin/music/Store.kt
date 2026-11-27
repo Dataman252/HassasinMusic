@@ -35,6 +35,10 @@ data class AppSettings(
     val onlineOnWifiOnly: Boolean = false,
     /** Show the player (in the chosen look) on the lock screen while music plays. */
     val lockScreen: Boolean = true,
+    /** Seconds the end of a song fades out and the next fades in (0 = off). Songs of one album stay gapless. */
+    val crossfadeSec: Int = 0,
+    /** How the cover changes with the song: "slide", "fade", "zoom", "flip". */
+    val coverAnim: String = "slide",
     /** Second line of the notification card: "quality" (artist · format · output), "lyrics" (the line sung now), "artist". */
     val notifLine: String = "quality",
     /** Buttons beside the play controls on the card: "shuffle_repeat", "seek", "love_lyrics". */

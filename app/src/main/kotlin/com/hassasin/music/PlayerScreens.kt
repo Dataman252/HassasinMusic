@@ -881,7 +881,19 @@ fun CoverPager(st: PlayState, page: @Composable (Track, Boolean) -> Unit) {
     val queue = st.queue
     if (queue.isEmpty() || st.index !in queue.indices) return
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = st.index) { queue.size }
-    LaunchedEffect(st.index) { if (pager.currentPage != st.index && st.index in queue.indices) pager.animateScrollToPage(st.index) }
+    val style = AppState.settings.collectAsState().value.coverAnim
+    // Slide glides the pages along; the other styles switch the page and animate the new cover in.
+    val reveal = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(st.index) {
+        if (pager.currentPage != st.index && st.index in queue.indices) {
+            if (style == "slide") pager.animateScrollToPage(st.index)
+            else {
+                pager.scrollToPage(st.index)
+                reveal.snapTo(0f)
+                reveal.animateTo(1f, androidx.compose.animation.core.tween(if (style == "flip") 520 else 420, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            }
+        }
+    }
     LaunchedEffect(pager) {
         androidx.compose.runtime.snapshotFlow { pager.settledPage }.collect { p ->
             if (p != Playback.state.value.index && p in Playback.state.value.queue.indices) Playback.jumpTo(p)
@@ -893,6 +905,12 @@ fun CoverPager(st: PlayState, page: @Composable (Track, Boolean) -> Unit) {
             val off = ((pager.currentPage - i) + pager.currentPageOffsetFraction).let { kotlin.math.abs(it) }.coerceIn(0f, 1f)
             val sc = 1f - off * 0.12f
             scaleX = sc; scaleY = sc; alpha = 1f - off * 0.5f
+            val r = reveal.value
+            if (r < 1f && i == st.index) when (style) {
+                "fade" -> alpha = r
+                "zoom" -> { val z = 0.8f + 0.2f * r; scaleX = z; scaleY = z; alpha = r }
+                "flip" -> { rotationY = (1f - r) * 90f; cameraDistance = 12f * density; alpha = if (r < 0.05f) 0f else 1f }
+            }
         }) { page(song, i == st.index) }
     }
 }
