@@ -1,5 +1,9 @@
 package com.hassasin.music
 
+import androidx.compose.ui.graphics.drawscope.clipPath
+
+import androidx.compose.ui.graphics.drawscope.clipRect
+
 import androidx.compose.ui.zIndex
 
 import androidx.compose.animation.animateColorAsState
@@ -90,8 +94,9 @@ fun PlayerScreen(nav: Nav) {
     val art = rememberArtBitmap(album)
     val glowTarget = remember(art) { art?.let { glowColor(it) } ?: Look.tint }
     val glowAnim = animateColorAsState(glowTarget, tween(700), label = "glow")
-    val glow = remember(glowAnim) { { glowAnim.value } }
-    LaunchedEffect(glowAnim) { androidx.compose.runtime.snapshotFlow { glowAnim.value }.collect { Look.tint = it } }
+    // While a cover is swiped (or glides to the next song) the colour moves with it, frame by frame.
+    val glow = remember(glowAnim) { { CoverSwipe.colorAt() ?: glowAnim.value } }
+    LaunchedEffect(glow) { androidx.compose.runtime.snapshotFlow { glow() }.collect { Look.tint = it } }
     if (Look.flow && t != null) return FlowPlayer(nav, t, st, settings, stats[t.id]?.rating ?: 0, glow, glowTarget)
     Box(Modifier.fillMaxSize().playerSwipes(nav)) {
         ImmersiveBackground(art, glow)
@@ -110,6 +115,7 @@ fun PlayerScreen(nav: Nav) {
                 CoverPager(st) { song, isCurrent ->
                     val pageAlbum = albumOf(song)
                     val bmp = if (isCurrent) art else rememberArtBitmap(pageAlbum, 700)
+                    CoverSwipe.Register(song, bmp)
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         if (Look.soft) SoftDisc(bmp, side, st.playing && isCurrent) { nav.go(Route.FixArt(pageAlbum?.key ?: song.albumKey)) }
                         else GlowCover(bmp, glow, side) { nav.go(Route.FixArt(pageAlbum?.key ?: song.albumKey)) }
@@ -914,6 +920,10 @@ fun CoverPager(st: PlayState, page: @Composable (Track, Boolean) -> Unit) {
             else pager.animateScrollToPage(st.index, animationSpec = androidx.compose.animation.core.tween(if (style == "slide") 450 else 650, easing = androidx.compose.animation.core.FastOutSlowInEasing))
         }
     }
+    androidx.compose.runtime.SideEffect { CoverSwipe.ids = queue.map { it.id } }
+    LaunchedEffect(pager) {
+        androidx.compose.runtime.snapshotFlow { pager.currentPage + pager.currentPageOffsetFraction }.collect { CoverSwipe.pos = it }
+    }
     LaunchedEffect(pager) {
         androidx.compose.runtime.snapshotFlow { pager.settledPage }.collect { p ->
             if (p != Playback.state.value.index && p in Playback.state.value.queue.indices) Playback.jumpTo(p)
@@ -955,7 +965,8 @@ fun CoverPager(st: PlayState, page: @Composable (Track, Boolean) -> Unit) {
                             translationX = pin
                             if (o < 0f) {
                                 // The next cover is revealed through a circle growing from the side you swipe from.
-                                val r = (1f - a) * kotlin.math.hypot(size.width, size.height)
+                                CoverSwipe.coverH = size.height
+                                val r = (1f - a) * CoverSwipe.radius(size.width, size.height)
                                 shape = androidx.compose.foundation.shape.GenericShape { sz, _ ->
                                     addOval(androidx.compose.ui.geometry.Rect(androidx.compose.ui.geometry.Offset(sz.width, sz.height / 2f), r))
                                 }
@@ -1017,8 +1028,23 @@ private fun FlowPlayer(nav: Nav, t: Track, st: PlayState, settings: AppSettings,
     val context = LocalContext.current
     Box(
         Modifier.fillMaxSize().playerSwipes(nav).drawBehind {
-            val g = glow()
-            drawRect(Brush.verticalGradient(listOf(lerpColor(g, Color.Black, 0.35f), lerpColor(g, Color.Black, 0.55f), lerpColor(g, Color.Black, 0.78f))))
+            fun bg(g: Color) = Brush.verticalGradient(listOf(lerpColor(g, Color.Black, 0.35f), lerpColor(g, Color.Black, 0.55f), lerpColor(g, Color.Black, 0.78f)))
+            CoverSwipe.fullH = size.height
+            val sp = CoverSwipe.split()
+            val anim = settings.coverAnim
+            if (sp != null && (anim == "wipe" || anim == "mask")) {
+                // The reveal edge carries on below the cover: the next song's colour sweeps the whole player.
+                val (c0, c1, f) = sp
+                drawRect(bg(c0))
+                if (anim == "wipe") clipRect(left = size.width * (1f - f)) { drawRect(bg(c1)) }
+                else {
+                    val ch = CoverSwipe.coverH.takeIf { it > 0f } ?: (size.height * 0.6f)
+                    val circle = androidx.compose.ui.graphics.Path().apply {
+                        addOval(androidx.compose.ui.geometry.Rect(androidx.compose.ui.geometry.Offset(size.width, ch / 2f), f * CoverSwipe.radius(size.width, ch)))
+                    }
+                    clipPath(circle) { drawRect(bg(c1)) }
+                }
+            } else drawRect(bg(glow()))
         },
     ) {
         Visualizer(settings.vizStyle, lerpColor(glowTarget, Color.White, 0.25f).copy(alpha = 0.6f), Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(170.dp))
@@ -1035,6 +1061,7 @@ private fun FlowPlayer(nav: Nav, t: Track, st: PlayState, settings: AppSettings,
                 ) {
                     CoverPager(st) { song, isCurrent ->
                         val b = rememberArtBitmap(albumOf(song), 1000)
+                        CoverSwipe.Register(song, b)
                         if (b != null) Image(b.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Ico(I.Note, C.TextLow, 96.dp) }
                         @Suppress("UNUSED_EXPRESSION") isCurrent
@@ -1079,4 +1106,48 @@ internal fun OutlineRound(icon: String, desc: String, size: androidx.compose.ui.
         Modifier.size(size).clip(CircleShape).border(1.5.dp, tint.copy(alpha = 0.7f), CircleShape).clickable(onClick = onClick).semantics { contentDescription = desc },
         contentAlignment = Alignment.Center,
     ) { Ico(icon, tint, size * 0.42f, filled = icon == I.Prev || icon == I.Next) }
+}
+
+/**
+ * Where the cover pager is between songs, and each queued song's colour, so the player's colour
+ * (and the reveal edge) moves with the swipe instead of changing after it.
+ */
+object CoverSwipe {
+    /** Pager position: 3.0 = on the 4th song, 3.4 = 40 % of the way to the 5th. */
+    var pos by androidx.compose.runtime.mutableFloatStateOf(-1f)
+    var ids: List<Long> = emptyList()
+    val colors = androidx.compose.runtime.mutableStateMapOf<Long, Color>()
+    /** Cover and whole-player heights (px), so the circle reveal lines up on both. */
+    var coverH = 0f
+    var fullH = 0f
+
+    /** Remembers a song's colour once its cover is loaded. */
+    @Composable
+    fun Register(song: Track, bmp: android.graphics.Bitmap?) {
+        LaunchedEffect(song.id, bmp) { if (bmp != null) colors[song.id] = glowColor(bmp) }
+    }
+
+    /** The two songs either side of the swipe, and how far it has gone; null when not between songs. */
+    fun split(): Triple<Color, Color, Float>? {
+        val p = pos
+        if (p < 0f) return null
+        val i = kotlin.math.floor(p).toInt()
+        val f = p - i
+        if (f < 0.001f || f > 0.999f) return null
+        val c0 = colors[ids.getOrNull(i) ?: return null] ?: return null
+        val c1 = colors[ids.getOrNull(i + 1) ?: return null] ?: return null
+        return Triple(c0, c1, f)
+    }
+
+    /** The colour at the pager position (blended mid-swipe); null when a colour is not known yet. */
+    fun colorAt(): Color? {
+        split()?.let { (c0, c1, f) -> return androidx.compose.ui.graphics.lerp(c0, c1, f) }
+        val p = pos
+        if (p < 0f) return null
+        return colors[ids.getOrNull(kotlin.math.round(p).toInt()) ?: return null]
+    }
+
+    /** Circle reveal radius at full size: on Flow it must reach the bottom of the player too. */
+    fun radius(w: Float, coverHeight: Float): Float =
+        if (Look.flow && fullH > 0f) kotlin.math.hypot(w, maxOf(coverHeight / 2f, fullH - coverHeight / 2f)) else kotlin.math.hypot(w, coverHeight)
 }

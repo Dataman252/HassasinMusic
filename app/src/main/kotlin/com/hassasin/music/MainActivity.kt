@@ -384,6 +384,7 @@ private fun VolumeHud(shownAt: Long) {
 private fun WhatsNew() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var notes by remember { mutableStateOf(Changelog.pending(context)) }
+    androidx.compose.runtime.SideEffect { Changelog.showing = notes != null }
     val n = notes ?: return
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { notes = null }, contentAlignment = Alignment.Center) {
         Column(Modifier.padding(24.dp).fillMaxWidth().raised(RoundedCornerShape(24.dp)).padding(22.dp)) {

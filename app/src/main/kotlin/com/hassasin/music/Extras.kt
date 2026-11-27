@@ -127,7 +127,10 @@ object AutoResume {
 
 /** What changed in each version, shown once after an update and in Credits. */
 object Changelog {
+    /** True while the What's new card is on screen. */
+    @Volatile var showing = false
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.9.4" to listOf("The player's colour moves with the swipe; Circle and Straight reveal sweep the whole player"),
         "0.9.3" to listOf(
             "Page turn: the cover turns like a notebook page, in the direction you swipe",
             "Circle reveal and Straight reveal: the next cover opens through a growing circle or a sweeping edge",
