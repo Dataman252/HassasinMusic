@@ -1,5 +1,6 @@
 package com.hassasin.music
 
+import androidx.compose.ui.layout.onSizeChanged
 import android.Manifest
 import android.content.ComponentName
 import android.content.pm.PackageManager
@@ -201,10 +202,16 @@ class MainActivity : ComponentActivity() {
                     var lastDepth by remember { mutableIntStateOf(depth) }
                     val forward = depth >= lastDepth
                     SideEffect { lastDepth = depth }
-                    Column(Modifier.fillMaxSize()) {
+                    // The mini player floats over the pages instead of taking space from them: pages keep the
+                    // same size while it slides in or out, so nothing jumps after a screen change.
+                    val density = LocalDensity.current
+                    var miniHeight by remember { mutableIntStateOf(0) }
+                    val hasSong = Playback.state.collectAsState().value.current != null
+                    val miniPad = with(density) { (if (hasSong) miniHeight else 0).toDp() }
+                    Box(Modifier.fillMaxSize()) {
                         AnimatedContent(
                             targetState = base,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxSize(),
                             transitionSpec = {
                                 val spring = spring<IntOffset>(dampingRatio = 0.9f, stiffness = 380f)
                                 when {
@@ -218,7 +225,7 @@ class MainActivity : ComponentActivity() {
                             label = "screens",
                         ) { r ->
                             Box(
-                                Modifier.fillMaxSize().drawWithContent {
+                                Modifier.fillMaxSize().padding(bottom = if (r == Route.Player) 0.dp else miniPad).drawWithContent {
                                     drawContent()
                                     if (r != Route.Player) {
                                         // Scrolled content fades out under the status bar and above the mini player.
@@ -244,8 +251,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        AnimatedVisibility(base != Route.Player, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
-                            Box(Modifier.navigationBarsPadding()) { MiniPlayer(nav) }
+                        AnimatedVisibility(
+                            base != Route.Player, modifier = Modifier.align(Alignment.BottomCenter),
+                            enter = slideInVertically(tween(280)) { it } + fadeIn(tween(220)), exit = slideOutVertically(tween(220)) { it } + fadeOut(tween(160)),
+                        ) {
+                            Box(Modifier.navigationBarsPadding().onSizeChanged { if (it.height > 0) miniHeight = it.height }) { MiniPlayer(nav) }
                         }
                     }
                     SheetHost(nav)

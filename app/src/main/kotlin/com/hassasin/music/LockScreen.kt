@@ -181,7 +181,7 @@ fun LockPlayer(onClose: () -> Unit) {
     val t = st.current
     val album = albumOf(t)
     val art = rememberArtBitmap(album)
-    val glowTarget = remember(art) { art?.let { glowColor(it) } ?: Color(0xFF6D5BFF) }
+    val glowTarget = remember(art) { art?.let { glowColor(it) } ?: Look.tint }
     val glowAnim = animateColorAsState(glowTarget, tween(700), label = "lock glow")
     val glow = glowAnim.value
     SideEffect { Look.tint = glow }

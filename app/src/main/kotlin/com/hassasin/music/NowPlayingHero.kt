@@ -61,7 +61,8 @@ import kotlin.math.min
 fun rememberArtBitmap(album: Album?, size: Int = 1000): Bitmap? {
     val version = ArtRepo.version
     val sharp = AppState.settings.collectAsState().value.artSharpness
-    val start = album?.let { ArtRepo.cachedBitmap(it) }?.let { if (sharp == 0) it else Sharpen.cached(album.key, it, sharp) }
+    // Until the sharpened copy is ready the plain cover shows, so the picture never blinks out.
+    val start = album?.let { ArtRepo.cachedBitmap(it) }?.let { if (sharp == 0) it else Sharpen.cached(album.key, it, sharp) ?: it }
     val b by produceState(start, album?.key, version, sharp) {
         val raw = album?.let { ArtRepo.bitmap(it, size) }
         value = if (raw == null || sharp == 0) raw else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Sharpen.apply(album.key, raw, sharp) }

@@ -86,7 +86,7 @@ fun PlayerScreen(nav: Nav) {
     val t = st.current
     val album = albumOf(t)
     val art = rememberArtBitmap(album)
-    val glowTarget = remember(art) { art?.let { glowColor(it) } ?: Color(0xFF6D5BFF) }
+    val glowTarget = remember(art) { art?.let { glowColor(it) } ?: Look.tint }
     val glowAnim = animateColorAsState(glowTarget, tween(700), label = "glow")
     val glow = remember(glowAnim) { { glowAnim.value } }
     LaunchedEffect(glowAnim) { androidx.compose.runtime.snapshotFlow { glowAnim.value }.collect { Look.tint = it } }
