@@ -36,6 +36,8 @@ data class PlayState(
     val shuffle: Boolean = false,
     val repeat: Int = 0,
     val usb: Boolean = false,
+    /** Playing through the phone's own direct (exclusive) output. */
+    val phoneDirect: Boolean = false,
     val usbPath: String = "",
     val untouched: Boolean = true,
     val dacPresent: Boolean = false,
@@ -73,7 +75,7 @@ private class MusicRenderersFactory(context: Context) : DefaultRenderersFactory(
         return UsbAudioSink(context, android, SoundEngine(forUsb = true)) {
             val s = AppState.settings.value
             // During a call the DAC belongs to Android, so the call uses your earphones and the DAC's microphone.
-            UsbOutputSettings(enabled = s.output == "usb" && !Playback.callActive, volumeDb = s.dacVolumeDb, maxDb = s.dacMaxDb)
+            UsbOutputSettings(enabled = s.output == "usb" && !Playback.callActive, phoneDirect = s.output == "direct" && !Playback.callActive, volumeDb = s.dacVolumeDb, maxDb = s.dacMaxDb)
         }
     }
 }
@@ -233,6 +235,9 @@ object Playback {
 
     fun seekTo(ms: Long) = player.seekTo(ms)
 
+    /** The exact playing position right now (the state's position is updated a few times a second). */
+    fun positionNow(): Long = player.currentPosition
+
     fun setShuffle(on: Boolean) {
         player.shuffleModeEnabled = on
         AppState.update { it.copy(shuffle = on) }
@@ -301,9 +306,11 @@ object Playback {
         val ready = player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING
         if (!ready) return
         when {
-            UsbLive.lost && UsbLive.active -> { UsbLive.lost = false; rebuildAudio("DAC stopped (unplugged)") }
-            wantUsb && !UsbLive.active && (force || rebuildsForTrack < 2) -> { rebuildsForTrack++; rebuildAudio("DAC available") }
-            !wantUsb && UsbLive.active -> rebuildAudio("direct output off")
+            UsbLive.lost && UsbLive.active -> { UsbLive.lost = false; rebuildAudio("direct output stopped (unplugged or rerouted)") }
+            wantUsb && !(UsbLive.active && UsbLive.kind == "usb") && (force || rebuildsForTrack < 2) -> { rebuildsForTrack++; rebuildAudio("DAC available") }
+            !wantUsb && UsbLive.active && UsbLive.kind == "usb" -> rebuildAudio("direct output off")
+            UsbLive.active && UsbLive.kind == "phone" && (s.output != "direct" || callActive || wantUsb) -> rebuildAudio("phone direct off")
+            !wantUsb && s.output == "direct" && !callActive && !UsbLive.active && (force || rebuildsForTrack < 2) -> { rebuildsForTrack++; rebuildAudio("phone direct") }
         }
     }
 
@@ -363,13 +370,14 @@ object Playback {
             index = player.currentMediaItemIndex,
             shuffle = player.shuffleModeEnabled,
             repeat = AppState.settings.value.repeat,
-            usb = UsbLive.active,
+            usb = UsbLive.active && UsbLive.kind == "usb",
+            phoneDirect = UsbLive.active && UsbLive.kind == "phone",
             usbPath = UsbLive.path,
             untouched = UsbLive.untouched,
             dacPresent = dac != null,
             dacAllowed = dac != null && usbm.hasPermission(dac),
             dacName = dac?.productName ?: "",
-            dacRate = sess?.rate ?: 0,
+            dacRate = (sess as? PhoneDirectSession)?.hwRate ?: sess?.outRate ?: 0,
             dacBits = UsbLive.fileBits,
             gaps = sess?.underruns() ?: 0,
         )

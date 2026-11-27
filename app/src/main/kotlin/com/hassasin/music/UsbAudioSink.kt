@@ -20,8 +20,10 @@ import java.nio.ByteOrder
 
 /** What the direct USB output is doing right now, for the Output screen and the volume keys. */
 object UsbLive {
-    @Volatile var session: UsbDacSession? = null
+    @Volatile var session: DirectOut? = null
     @Volatile var active = false
+    /** "usb" (app's USB driver) or "phone" (the phone's direct hardware output) while [active]. */
+    @Volatile var kind = ""
     /** "44.1 kHz 24-bit → Audiocular D07 44.1 kHz 32-bit" */
     @Volatile var path = ""
     /** True while the file's samples reach the DAC unchanged. */
@@ -37,6 +39,8 @@ object UsbLive {
 /** What the direct USB output should do, read each time a track is set up. */
 data class UsbOutputSettings(
     val enabled: Boolean,
+    /** Play through the phone's own direct (exclusive MMAP) output. */
+    val phoneDirect: Boolean = false,
     val volumeDb: Double,
     val maxDb: Double,
 )
@@ -62,7 +66,7 @@ class UsbAudioSink(
 
     init { UsbDacSession.context = context.applicationContext }
     private var usb = false
-    private var session: UsbDacSession? = null
+    private var session: DirectOut? = null
     private var pipeline: AudioProcessingPipeline? = null
     private var inFormat = AudioProcessor.AudioFormat.NOT_SET
     private var outFormat = AudioProcessor.AudioFormat.NOT_SET
@@ -95,20 +99,23 @@ class UsbAudioSink(
         return AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY
     }
 
+    private fun directWanted(): Boolean = dacReady() || settings().phoneDirect
+
     override fun supportsFormat(format: Format): Boolean =
-        if (dacReady()) usbSupport(format) != AudioSink.SINK_FORMAT_UNSUPPORTED else super.supportsFormat(format)
+        if (directWanted()) usbSupport(format) != AudioSink.SINK_FORMAT_UNSUPPORTED else super.supportsFormat(format)
 
     override fun getFormatSupport(format: Format): Int =
-        if (dacReady()) usbSupport(format) else super.getFormatSupport(format)
+        if (directWanted()) usbSupport(format) else super.getFormatSupport(format)
 
     override fun configure(inputFormat: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
         androidFormat = inputFormat.takeIf { it.sampleMimeType == MimeTypes.AUDIO_RAW }
-        if (!dacReady() || usbSupport(inputFormat) == AudioSink.SINK_FORMAT_UNSUPPORTED) {
+        val s = settings()
+        val wantKind = when { dacReady() -> "usb"; s.phoneDirect -> "phone"; else -> "" }
+        if (wantKind.isEmpty() || usbSupport(inputFormat) == AudioSink.SINK_FORMAT_UNSUPPORTED) {
             useFallback()
-            super.configure(inputFormat, specifiedBufferSize, outputChannels)
+            fallbackConfigure(inputFormat, specifiedBufferSize, outputChannels)
             return
         }
-        val s = settings()
         val input = AudioProcessor.AudioFormat(inputFormat.sampleRate, inputFormat.channelCount, inputFormat.pcmEncoding)
         val processors = mutableListOf<AudioProcessor>()
         if (outputChannels != null) processors += ChannelOrder(outputChannels)
@@ -122,35 +129,38 @@ class UsbAudioSink(
         } catch (e: AudioProcessor.UnhandledAudioFormatException) {
             Log.w(TAG, "cannot process $input", e)
             useFallback()
-            super.configure(inputFormat, specifiedBufferSize, outputChannels)
+            fallbackConfigure(inputFormat, specifiedBufferSize, outputChannels)
             return
         }
         p.flush()
 
-        val dac = UsbDacProbe.findDac(usbManager)
+        // A session of the other kind (USB DAC vs phone) is closed first.
+        if (session != null && session?.kind != wantKind) useFallback()
         if (session == null) {
             val until = SystemClock.elapsedRealtime() + 2500
             while (UsbLive.session != null && SystemClock.elapsedRealtime() < until) SystemClock.sleep(50)
         }
-        val current = session ?: dac?.let { UsbDacSession.open(usbManager, it) }?.also {
-            it.switchMode = 1  // silence only: the DAC's mute makes a "ting", volume glides distort
-            it.queueMs = 30  // the most the vivo's USB controller takes; covers its screen-off hiccups
-            it.setVolumeDb(minOf(s.volumeDb, s.maxDb))
-        }
+        val current: DirectOut? = session ?: if (wantKind == "usb") {
+            UsbDacProbe.findDac(usbManager)?.let { UsbDacSession.open(usbManager, it) }?.also {
+                it.switchMode = 1  // silence only: the DAC's mute makes a "ting", volume glides distort
+                it.queueMs = 30  // the most the vivo's USB controller takes; covers its screen-off hiccups
+                it.setVolumeDb(minOf(s.volumeDb, s.maxDb))
+            }
+        } else PhoneDirectSession.open()
         if (current == null) {
             useFallback()
-            super.configure(inputFormat, specifiedBufferSize, outputChannels)
+            fallbackConfigure(inputFormat, specifiedBufferSize, outputChannels)
             return
         }
         session = current
-        if (current.rate != out.sampleRate || !current.isRunning()) {
-            // Let what is queued finish before the DAC changes rate.
+        if (current.outRate != out.sampleRate || !current.isRunning()) {
+            // Let what is queued finish before the output changes rate.
             val until = SystemClock.elapsedRealtime() + 1500
             while (current.isRunning() && current.ringFrames() > 0 && SystemClock.elapsedRealtime() < until) SystemClock.sleep(5)
-            if (!current.start(out.sampleRate)) {
-                Log.w(TAG, "DAC refused ${out.sampleRate} Hz; using Android's output")
+            if (!current.startAt(out.sampleRate)) {
+                Log.w(TAG, "${current.outName} refused ${out.sampleRate} Hz; using Android's output")
                 useFallback()
-                super.configure(inputFormat, specifiedBufferSize, outputChannels)
+                fallbackConfigure(inputFormat, specifiedBufferSize, outputChannels)
                 return
             }
             framesWritten = 0
@@ -162,12 +172,14 @@ class UsbAudioSink(
         primed = false
         current.setPaused(true)
         UsbLive.active = true
-        UsbLive.untouched = !effects && input.channelCount == 2
+        UsbLive.kind = current.kind
+        val hw = (current as? PhoneDirectSession)?.hwRate ?: out.sampleRate
+        UsbLive.untouched = !effects && input.channelCount == 2 && hw == input.sampleRate
         val bitsIn = when (input.encoding) { C.ENCODING_PCM_16BIT -> 16; C.ENCODING_PCM_24BIT -> 24; else -> 32 }
         UsbLive.fileRate = input.sampleRate
         UsbLive.fileBits = bitsIn
-        UsbLive.dacName = current.device.productName ?: "USB DAC"
-        UsbLive.path = "${khz(input.sampleRate)} $bitsIn-bit → ${UsbLive.dacName} ${khz(current.rate)} ${current.current?.bits ?: 32}-bit"
+        UsbLive.dacName = current.outName
+        UsbLive.path = "${khz(input.sampleRate)} $bitsIn-bit → ${UsbLive.dacName} ${khz(hw)} ${current.outBits}-bit"
         pipeline = p
         inFormat = input
         outFormat = out
@@ -177,7 +189,19 @@ class UsbAudioSink(
         draining = false
         startMediaUs = C.TIME_UNSET
         anchorFrames = framesWritten
-        Log.i(TAG, "direct USB: ${input.sampleRate} Hz ${input.channelCount}ch enc ${input.encoding} -> DAC ${current.rate} Hz ${current.current?.bits}-bit, effects $effects")
+        Log.i(TAG, "direct ${current.kind}: ${input.sampleRate} Hz ${input.channelCount}ch enc ${input.encoding} -> ${current.outName} $hw Hz ${current.outBits}-bit, effects $effects")
+    }
+
+    /** Android's own output; with "Android bit-perfect" chosen, Android is asked for an unmixed USB stream first. */
+    private fun fallbackConfigure(inputFormat: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
+        val ctx = UsbDacSession.context
+        if (ctx != null && AppState.settings.value.output == "usb_android" && inputFormat.sampleMimeType == MimeTypes.AUDIO_RAW) {
+            val effects = Eq.anyEffect(SoundState.settings, false)
+            // 16-bit songs go as 16-bit; deeper ones as 32-bit float (exact for 24-bit).
+            val enc = if (inputFormat.pcmEncoding == C.ENCODING_PCM_16BIT) android.media.AudioFormat.ENCODING_PCM_16BIT else android.media.AudioFormat.ENCODING_PCM_FLOAT
+            if (effects) AndroidBitPerfect.clear(ctx) else AndroidBitPerfect.prepare(ctx, inputFormat.sampleRate, enc)
+        } else if (ctx != null) AndroidBitPerfect.clear(ctx)
+        super.configure(inputFormat, specifiedBufferSize, outputChannels)
     }
 
     private fun khz(hz: Int) = if (hz % 1000 == 0) "${hz / 1000} kHz" else "%.1f kHz".format(hz / 1000.0)
@@ -185,6 +209,7 @@ class UsbAudioSink(
     /** Hands the DAC back to Android. */
     private fun useFallback() {
         UsbLive.active = false
+        UsbLive.kind = ""
         UsbLive.session = null
         UsbLive.path = ""
         usb = false

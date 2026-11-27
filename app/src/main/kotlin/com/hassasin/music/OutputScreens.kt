@@ -102,7 +102,14 @@ fun OutputScreen(nav: Nav, sheet: Boolean = false) {
             item {
                 Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("OUTPUT", style = eyebrow())
-                    Outputs.ALL.forEach { m -> OutputChoice(m, s.output == m.key) { Playback.setOutput(m.key) } }
+                    Outputs.shown().filter { !it.more }.forEach { m -> OutputChoice(m, s.output == m.key) { Playback.setOutput(m.key) } }
+                    var more by remember { mutableStateOf(Outputs.of(s.output).more) }
+                    Text(
+                        if (more) "Fewer options" else "More options",
+                        style = body(13.sp, FontWeight.Bold, C.AmberText),
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { more = !more }.padding(horizontal = 6.dp, vertical = 6.dp),
+                    )
+                    if (more) Outputs.shown().filter { it.more }.forEach { m -> OutputChoice(m, s.output == m.key) { Playback.setOutput(m.key) } }
                 }
             }
             item {
@@ -410,7 +417,8 @@ fun SettingsScreen(nav: Nav) {
             }
             item { UpdateRow() }
             item { SettingRow("Support the developer", "A coffee by UPI keeps new versions coming") { RoundButton(I.Star, "Support the developer", { Donate.showing = true }, 40.dp) } }
-            item { SettingRow("Credits", "Hassasin Music ${BuildConfig.VERSION_NAME} · who and what made it") { RoundButton(I.Star, "Credits", { nav.go(Route.Credits) }, 40.dp) } }
+            item { val ctx = androidx.compose.ui.platform.LocalContext.current; SettingRow("Share the app", "Send friends the download link") { RoundButton(I.Share, "Share the app", { ShareApp.share(ctx) }, 40.dp) } }
+            item { SettingRow("Credits","Hassasin Music ${BuildConfig.VERSION_NAME} · who and what made it") { RoundButton(I.Star, "Credits", { nav.go(Route.Credits) }, 40.dp) } }
         }
     }
 }

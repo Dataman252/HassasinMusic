@@ -151,6 +151,7 @@ class MainActivity : ComponentActivity() {
         setContent { Root() }
         // New versions come from the app's GitHub releases (checked at most once an hour).
         lifecycleScope.launch { Updater.check(applicationContext) }
+        PhoneDirectSession.checkAvailable()
     }
 
     override fun onDestroy() {
@@ -165,7 +166,7 @@ class MainActivity : ComponentActivity() {
 
     /** In USB Direct the phone's volume keys move the DAC's own volume, 1 dB per press. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (UsbLive.active && (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+        if (UsbLive.active && UsbLive.kind == "usb" && (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
             if (event.action == KeyEvent.ACTION_DOWN) {
                 val step = if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) 1.0 else -1.0
                 Playback.setDacVolume(AppState.settings.value.dacVolumeDb + step)

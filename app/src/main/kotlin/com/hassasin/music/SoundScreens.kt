@@ -2,6 +2,11 @@ package com.hassasin.music
 
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -365,6 +370,7 @@ fun SoundSheet(nav: Nav, startTab: Int) {
             }
             if (tab < 4) Toggle(settings.sound.eqOn, "Sound effects") { on -> AppState.updateSound { it.copy(eqOn = on) } }
         }
+        ClipWarning(settings.sound)
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(SOUND_TABS) { i, label -> Chip(label, i == tab) { tab = i } }
         }
@@ -386,6 +392,49 @@ fun SoundSheet(nav: Nav, startTab: Int) {
                 4 -> EarphonesScreen(nav, sheet = true)
                 else -> OutputScreen(nav, sheet = true)
             }
+        }
+    }
+}
+
+/**
+ * Red warning while the EQ or effects push the sound past full scale. Shows by how much, and
+ * lowers the master gain by that amount (rounded up to half a dB) with one tap.
+ */
+@Composable
+fun ClipWarning(s: SoundSettings) {
+    var over by remember { mutableStateOf(0.0) }
+    LaunchedEffect(Unit) { while (true) { over = ClipMeter.now(); kotlinx.coroutines.delay(250) } }
+    androidx.compose.animation.AnimatedVisibility(
+        over > 0.0,
+        enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+    ) {
+        val cut = kotlin.math.ceil(over * 2) / 2.0
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+                .clip(RoundedCornerShape(14.dp)).background(C.Limit.copy(alpha = 0.16f))
+                .border(1.dp, C.Limit.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .semantics { contentDescription = "Clipping warning: lower the sound by %.1f dB".format(cut) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(10.dp).background(C.Limit, CircleShape))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Clipping: %.1f dB over".format(over), style = body(14.sp, FontWeight.Bold, C.Limit))
+                Text(
+                    if (s.limiter) "The limiter is squashing it. Lower the EQ or effects by %.1f dB.".format(cut)
+                    else "The sound is distorting. Lower the EQ or effects by %.1f dB.".format(cut),
+                    style = body(12.sp, color = C.TextHi),
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.clip(RoundedCornerShape(10.dp)).background(C.Limit).clickable {
+                    AppState.updateSound { it.copy(eqOn = true, fx = it.fx.copy(masterGainDb = ((it.fx.masterGainDb - cut) * 2).roundToInt() / 2.0)) }
+                    ClipMeter.clear(); over = 0.0
+                }.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) { Text("Lower %.1f dB".format(cut), style = body(13.sp, FontWeight.Bold, Color.White)) }
         }
     }
 }

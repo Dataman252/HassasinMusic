@@ -216,6 +216,35 @@ class Biquad(val b0: Double, val b1: Double, val b2: Double, val a1: Double, val
     }
 }
 
+/**
+ * Watches the sound just before the limiter: any sample over 0 dBFS means the EQ or effects push
+ * the music past full scale (clipping, or the limiter squashing it). The Sound sheet shows a red
+ * warning while this happens and offers to lower the master gain by the amount needed.
+ */
+object ClipMeter {
+    /** The worst overshoot in dB above full scale in the last few seconds (0 = none). */
+    @Volatile var overDb = 0.0
+        private set
+    @Volatile var lastAt = 0L
+        private set
+    /** Overshoots smaller than this are ignored (rounding noise, not audible). */
+    const val MIN_DB = 0.1
+    const val HOLD_MS = 3000L
+
+    fun report(peak: Double) {
+        val db = 20 * log10(peak)
+        if (db < MIN_DB) return
+        val now = System.currentTimeMillis()
+        overDb = if (now - lastAt > HOLD_MS) db else max(overDb, db)
+        lastAt = now
+    }
+
+    /** The overshoot to show now, or 0 when nothing clipped in the last few seconds. */
+    fun now(): Double = if (System.currentTimeMillis() - lastAt <= HOLD_MS) overDb else 0.0
+
+    fun clear() { overDb = 0.0; lastAt = 0L }
+}
+
 /** The settings every engine reads; bumping [version] makes running engines pick up changes. */
 object SoundState {
     @Volatile var settings = SoundSettings()
@@ -223,7 +252,7 @@ object SoundState {
     @Volatile var version = 0L
         private set
 
-    fun set(s: SoundSettings) { settings = s; version++ }
+    fun set(s: SoundSettings) { if (s != settings) ClipMeter.clear(); settings = s; version++ }
 }
 
 /**
@@ -315,6 +344,7 @@ class SoundEngine(private val forUsb: Boolean) : BaseAudioProcessor() {
         val out = replaceOutputBuffer(frames * ch * outBytes).order(ByteOrder.LITTLE_ENDIAN)
         val inp = inputBuffer.order(ByteOrder.LITTLE_ENDIAN)
         val release = 1.0 - 1.0 / (0.08 * inputAudioFormat.sampleRate)
+        var over = 0.0
         for (f in 0 until frames) {
             var l = read(inp, enc)
             var r = if (ch == 2) read(inp, enc) else l
@@ -327,8 +357,9 @@ class SoundEngine(private val forUsb: Boolean) : BaseAudioProcessor() {
                     l = m + s; r = m - s
                 }
                 l *= balL; r *= balR
+                val peak = max(abs(l), abs(r))
+                if (peak > over) over = peak
                 if (limiter) {
-                    val peak = max(abs(l), abs(r))
                     val target = if (peak > ceiling) ceiling / peak else 1.0
                     env = if (target < env) target else env * release + (1 - release) * target
                     l *= env; r *= env
@@ -346,6 +377,7 @@ class SoundEngine(private val forUsb: Boolean) : BaseAudioProcessor() {
             }
         }
         out.flip()
+        if (over > 1.0) ClipMeter.report(over)
     }
 
     override fun onFlush() {

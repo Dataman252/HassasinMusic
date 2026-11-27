@@ -53,6 +53,22 @@ import kotlinx.coroutines.launch
 /** The developer's UPI payment link (the same one inside the QR code). Empty hides the pop-up. */
 const val DONATE_URL = "upi://pay?pa=7016587945-2@axl&pn=HASSANKHAN%20PATHAN&cu=INR&tn=Coffee%20for%20Hassasin%20Music"
 
+/** Where anyone can download the newest version. */
+const val DOWNLOAD_URL = "https://github.com/Dataman252/HassasinMusic/releases/latest"
+
+/** Opens Android's share sheet with the download link, so friends can get the app. */
+object ShareApp {
+    fun share(context: Context) {
+        val text = "Hassasin Music: a free hi-res music player for Android, with bit-perfect USB DAC output, synced lyrics and a full EQ.\n\nDownload: $DOWNLOAD_URL"
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Hassasin Music")
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        context.startActivity(Intent.createChooser(send, "Share Hassasin Music").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+}
+
 /**
  * The app is free; once per new version it asks, gently, for a coffee. "Not now" asks again next
  * time the app opens; "Don't ask again" stays quiet until the next version.

@@ -25,7 +25,7 @@ data class Lyrics(
     val synced: List<LyricLine>?,
     val plain: String?,
     val instrumental: Boolean,
-    /** Where they came from: "File", "Tags", "LRCLIB", "Pasted". */
+    /** Where they came from: "File", "Tags", "LRCLIB", "Pasted", "Tapped". */
     val source: String,
 )
 
@@ -39,6 +39,8 @@ data class CachedLyrics(
     val checkedAt: Long = System.currentTimeMillis(),
     /** Which version of the search logic produced this; "not found" from older logic is retried. */
     val logic: Int = 0,
+    /** Picked or timed by the user: wins over lyrics in the file or its tags. */
+    val userChosen: Boolean = false,
 )
 
 @Serializable
@@ -48,7 +50,7 @@ object LyricsRepo {
     private const val TAG = "Lyrics"
     private const val RETRY_MS = 24L * 3600 * 1000
     /** Bump when the search improves, so earlier "not found" answers are tried again. */
-    private const val LOGIC = 6
+    private const val LOGIC = 7
     private lateinit var dir: File
 
     fun init(context: Context) { dir = File(context.filesDir, "lyrics").apply { mkdirs() } }
@@ -121,21 +123,25 @@ object LyricsRepo {
     // ---- finding ----
 
     /**
-     * Lyrics for a track, in this order: .lrc beside the file → lyrics in the file's tags → cache →
-     * LRCLIB by exact match → LRCLIB search. Returns null when nothing is found.
+     * Lyrics for a track, in this order: the user's own pick or tapped timing → .lrc beside the file →
+     * lyrics in the file's tags → cache → LRCLIB by exact match → LRCLIB search. Lyrics in the file
+     * without timing still get an online look-up, and timed lyrics found there are used instead.
+     * Returns null when nothing is found.
      */
     suspend fun find(context: Context, t: Track, online: Boolean, force: Boolean = false): Lyrics? = withContext(Dispatchers.IO) {
-        sidecar(t)?.let { return@withContext parse(it, null, false, "File") }
-        Tags.embeddedLyrics(t.path)?.let { return@withContext parse(it, null, false, "Tags") }
         val cached = Store.load<CachedLyrics?>("lyrics/${cacheFile(t).name}", null)
+        if (cached != null && cached.found && cached.userChosen && !force) return@withContext parse(cached.raw, cached.plain, cached.instrumental, cached.source)
+        val local = sidecar(t)?.let { parse(it, null, false, "File") } ?: Tags.embeddedLyrics(t.path)?.let { parse(it, null, false, "Tags") }
+        if (local?.synced != null) return@withContext local
+        fun better(found: Lyrics?): Lyrics? = if (found != null && (local == null || found.synced != null)) found else local
         if (cached != null && !force) {
-            if (cached.found) return@withContext parse(cached.raw, cached.plain, cached.instrumental, cached.source)
-            if (cached.logic >= LOGIC && System.currentTimeMillis() - cached.checkedAt < RETRY_MS) return@withContext null
+            if (cached.found) return@withContext better(parse(cached.raw, cached.plain, cached.instrumental, cached.source))
+            if (cached.logic >= LOGIC && System.currentTimeMillis() - cached.checkedAt < RETRY_MS) return@withContext local
         }
-        if (!online) return@withContext null
+        if (!online) return@withContext local
         val hit = lookup(t)
-        Store.save("lyrics/${cacheFile(t).name}", hit?.let { CachedLyrics(true, it.synced ?: it.plain, it.plain, it.instrumental, "LRCLIB") } ?: CachedLyrics(false, logic = LOGIC))
-        hit?.let { parse(it.synced, it.plain, it.instrumental, "LRCLIB") }
+        Store.save("lyrics/${cacheFile(t).name}", hit?.let { CachedLyrics(true, it.synced ?: it.plain, it.plain, it.instrumental, "LRCLIB", logic = LOGIC) } ?: CachedLyrics(false, logic = LOGIC))
+        better(hit?.let { parse(it.synced, it.plain, it.instrumental, "LRCLIB") })
     }
 
     /** True when this track still needs an online look-up (nothing local, nothing cached that counts). */
@@ -246,7 +252,7 @@ object LyricsRepo {
 
     /** Keeps the user's choice (from the manual search, or pasted text) for this track. */
     fun choose(t: Track, raw: String?, plain: String?, instrumental: Boolean, source: String) {
-        Store.save("lyrics/${cacheFile(t).name}", CachedLyrics(true, raw ?: plain, plain, instrumental, source))
+        Store.save("lyrics/${cacheFile(t).name}", CachedLyrics(true, raw ?: plain, plain, instrumental, source, userChosen = true))
     }
 
     // ---- per-track timing offset ----

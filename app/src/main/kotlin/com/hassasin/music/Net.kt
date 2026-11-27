@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
@@ -13,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 /** One HTTP client for the online look-ups (lyrics, album art, headphone profiles). */
 object Net {
-    const val USER_AGENT = "HassasinMusic/0.1 ( https://github.com/Dataman252 )"
+    val USER_AGENT = "HassasinMusic/${BuildConfig.VERSION_NAME} ( https://github.com/Dataman252 )"
     private const val TAG = "Net"
 
     val client: OkHttpClient = OkHttpClient.Builder()
@@ -29,8 +31,13 @@ object Net {
         return !wifiOnly || !caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
     }
 
-    /** GET returning (status, body). Retries "busy" answers (HTTP 503) a few times with growing waits. */
-    suspend fun get(url: String, retries: Int = 3): Pair<Int, String?> {
+    /**
+     * GET returning (status, body). Retries "busy" answers (HTTP 503) a few times with growing waits.
+     * Always runs off the main thread (Android refuses network calls there).
+     */
+    suspend fun get(url: String, retries: Int = 3): Pair<Int, String?> = withContext(Dispatchers.IO) { getNow(url, retries) }
+
+    private suspend fun getNow(url: String, retries: Int): Pair<Int, String?> {
         var wait = 1500L
         repeat(retries + 1) { attempt ->
             val result = runCatching {
@@ -45,11 +52,13 @@ object Net {
         return -1 to null
     }
 
-    suspend fun bytes(url: String): ByteArray? = runCatching {
-        client.newCall(Request.Builder().url(url).header("User-Agent", USER_AGENT).build()).execute().use { r ->
-            if (r.isSuccessful) r.body?.bytes() else null
-        }
-    }.getOrNull()
+    suspend fun bytes(url: String): ByteArray? = withContext(Dispatchers.IO) {
+        runCatching {
+            client.newCall(Request.Builder().url(url).header("User-Agent", USER_AGENT).build()).execute().use { r ->
+                if (r.isSuccessful) r.body?.bytes() else { Log.w(TAG, "GET ${r.code}: $url"); null }
+            }
+        }.onFailure { Log.w(TAG, "GET failed: $url", it) }.getOrNull()
+    }
 
     private val itLock = Mutex()
     private var itLast = 0L

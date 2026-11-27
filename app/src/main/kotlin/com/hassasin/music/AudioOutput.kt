@@ -11,33 +11,46 @@ import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
 
 /** One way of getting the sound out, as listed on the Output tab. */
-data class OutputMode(val key: String, val title: String, val line: String, val effects: Boolean, val tags: List<String>)
+data class OutputMode(val key: String, val title: String, val line: String, val effects: Boolean, val tags: List<String>, val more: Boolean = false)
 
 object Outputs {
     val ALL = listOf(
         OutputMode(
             "tuned", "Phone",
-            "Android's normal output, with your phone's own sound tuning. Works on speaker, wired, Bluetooth and USB.",
+            "Android's normal output, with your phone's own sound processing. Works on speaker, wired, Bluetooth and USB.",
             effects = true, tags = listOf("Default", "App effects"),
+        ),
+        OutputMode(
+            "direct", "Direct (phone)",
+            "Skips Android's mixer and the phone's sound processing: the app writes straight into the phone's audio hardware (speaker or wired).",
+            effects = true, tags = listOf("No phone processing", "App effects"),
+        ),
+        OutputMode(
+            "usb", "Untouched (USB DAC)",
+            "The exact file goes to your USB DAC through the app's own driver, at the song's own rate and bit depth.",
+            effects = true, tags = listOf("Bit-perfect", "DAC volume"),
+        ),
+        OutputMode(
+            "usb_android", "Untouched (Android USB)",
+            "Android's own bit-perfect USB mode: the file goes unmixed to your DAC, and Android keeps the DAC for calls and other apps.",
+            effects = false, tags = listOf("Bit-perfect", "Android 14+"),
         ),
         OutputMode(
             "hires", "Hi-Res",
             "Keeps 24-bit songs at full depth on their way to Android (when app effects are off).",
-            effects = true, tags = listOf("24-bit"),
+            effects = true, tags = listOf("24-bit"), more = true,
         ),
         OutputMode(
             "offload", "Battery saver",
             "Your phone's audio chip plays the file itself. App effects pause.",
-            effects = false, tags = listOf("Lowest battery"),
-        ),
-        OutputMode(
-            "usb", "USB DAC",
-            "The exact file goes straight to your USB DAC, skipping Android.",
-            effects = true, tags = listOf("Bit-perfect"),
+            effects = false, tags = listOf("Lowest battery"), more = true,
         ),
     )
 
     fun of(key: String): OutputMode = ALL.firstOrNull { it.key == key } ?: ALL.first()
+
+    /** The options this phone can use: Direct (phone) only where the phone allows it. */
+    fun shown(): List<OutputMode> = ALL.filter { it.key != "direct" || PhoneDirectSession.available == true }
 
     /** Codecs the phone's audio chip can decode itself (offload), checked with Android. */
     fun offloadCodecs(context: Context): List<String> {
@@ -62,6 +75,12 @@ object Outputs {
             "offload" -> offloadCodecs(context).let { c ->
                 if (c.isEmpty()) "On this phone: not available; plays as Phone."
                 else "On this phone: works for ${c.joinToString(" and ")} files. Other files (like FLAC) play as Phone."
+            }
+            "direct" -> "On this phone: the hardware runs at $mixer. Songs at that rate arrive untouched; others are converted by the app's own high-quality converter. Not for Bluetooth."
+            "usb_android" -> when (val d = AndroidBitPerfect.describe(context)) {
+                null -> if (android.os.Build.VERSION.SDK_INT < 34) "Needs Android 14 or newer." else "No USB DAC plugged in: plays as Phone until you plug one in."
+                "" -> "This DAC offers no bit-perfect formats to Android: plays as Phone."
+                else -> "This DAC offers: $d. Turn app effects off for bit-perfect."
             }
             "usb" -> when {
                 st.usb -> "Now: playing on ${st.dacName.ifBlank { "your DAC" }}."
@@ -152,7 +171,7 @@ object DualSink {
         fun wanted(): AudioSink {
             val mode = AppState.settings.value.output
             val effects = Eq.anyEffect(SoundState.settings, false)
-            return if (mode == "hires" && !effects) floatSink else intSink
+            return if ((mode == "hires" || mode == "usb_android") && !effects) floatSink else intSink
         }
         val handler = java.lang.reflect.InvocationHandler { proxy, method, args ->
             val a = args ?: emptyArray()

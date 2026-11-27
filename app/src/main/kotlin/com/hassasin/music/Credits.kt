@@ -82,7 +82,11 @@ fun CreditsScreen(nav: Nav) {
                     Text("Made by Hassasin", style = body(15.sp, FontWeight.Bold, C.AmberText))
                     Text("github.com/Dataman252/HassasinMusic", style = mono(11.sp, color = C.TextMid))
                     Spacer(Modifier.height(14.dp))
-                    Chip("☕  Buy me a coffee (UPI)", false) { Donate.showing = true }
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Chip("↗  Share the app", false) { ShareApp.share(ctx) }
+                        Chip("☕  Buy me a coffee", false) { Donate.showing = true }
+                    }
                 }
             }
             CREDITS.forEach { (section, list) ->

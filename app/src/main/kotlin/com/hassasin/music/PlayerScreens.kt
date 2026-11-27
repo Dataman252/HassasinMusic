@@ -263,6 +263,8 @@ private fun MoreMenu(nav: Nav, t: Track?, album: Album?, s: AppSettings, rating:
             androidx.compose.material3.HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
             item("Settings") { nav.go(Route.Settings) }()
             item("Credits") { nav.go(Route.Credits) }()
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            item("Share the app") { ShareApp.share(ctx) }()
         }
     }
 }
@@ -320,22 +322,37 @@ fun LyricsScreen(nav: Nav, sheet: Boolean = false) {
         loadedFor = t?.id ?: -1
     }
     var offset by remember(t?.id) { mutableLongStateOf(t?.let { LyricsRepo.offsetMs(it) } ?: 0L) }
+    val shown = lyrics
+    var tapping by remember(t?.id) { mutableStateOf(false) }
     ScreenShell(sheet, Color(0xFF2A1F5C)) {
         Column(Modifier.fillMaxSize().then(if (sheet) Modifier else Modifier.statusBarsPadding().navigationBarsPadding())) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!sheet) { RoundButton(I.Down, "Close lyrics", { nav.back() }); Spacer(Modifier.width(12.dp)) }
                 Column(Modifier.weight(1f)) {
                     Text(t?.title ?: "Lyrics", style = body(15.sp, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(lyrics?.let { "${if (it.synced != null) "Synced" else "Plain"} · from ${it.source}" } ?: t?.artist ?: "", style = body(12.sp, color = C.TextMid), maxLines = 1)
+                    Text(
+                        shown?.let {
+                            when {
+                                it.synced != null -> "Synced · from ${it.source}"
+                                !it.plain.isNullOrBlank() -> "Not timed yet · from ${it.source}"
+                                else -> "From ${it.source}"
+                            }
+                        } ?: t?.artist ?: "",
+                        style = body(12.sp, color = C.TextMid), maxLines = 1,
+                    )
                 }
-                if (lyrics?.let { l -> (l.plain ?: "").any { it in '\u0900'..'\u097F' } } == true) {
+                if (Hinglish.canConvert(lyrics?.plain)) {
                     val hing = settings.lyricsHinglish
+                    val letter = when (Hinglish.scriptName(lyrics?.plain)) {
+                        "Bengali" -> "অ"; "Punjabi" -> "ਅ"; "Gujarati" -> "અ"; "Odia" -> "ଅ"; "Tamil" -> "அ"
+                        "Telugu" -> "అ"; "Kannada" -> "ಅ"; "Malayalam" -> "അ"; "Urdu" -> "ا"; else -> "अ"
+                    }
                     Box(
                         Modifier.height(40.dp).then(if (hing) Modifier.amberSelected(RoundedCornerShape(20.dp)) else Modifier.raised(RoundedCornerShape(20.dp), 4.dp))
                             .clip(RoundedCornerShape(20.dp)).clickable { AppState.update { it.copy(lyricsHinglish = !hing) } }
                             .padding(horizontal = 14.dp).semantics { contentDescription = if (hing) "Showing Hinglish. Tap for the original script" else "Showing the original script. Tap for Hinglish" },
                         contentAlignment = Alignment.Center,
-                    ) { Text(if (hing) "Hinglish" else "\u0905 \u2192 Aa", style = body(13.sp, FontWeight.Bold, if (hing) C.AmberText else C.TextHi)) }
+                    ) { Text(if (hing) "Hinglish" else "$letter \u2192 Aa", style = body(13.sp, FontWeight.Bold, if (hing) C.AmberText else C.TextHi)) }
                     Spacer(Modifier.width(8.dp))
                 }
                 RoundButton(I.Search, "Search lyrics", { searching = !searching })
@@ -344,7 +361,12 @@ fun LyricsScreen(nav: Nav, sheet: Boolean = false) {
                 LyricsSearch(t) { searching = false; reload++ }
                 return@Column
             }
-            val l = lyrics
+            val plainText = lyrics?.plain
+            if (tapping && t != null && !plainText.isNullOrBlank()) {
+                TapSync(t, plainText, st.playing) { saved -> tapping = false; if (saved) reload++ }
+                return@Column
+            }
+            val l = shown
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     t == null -> Text("Nothing playing.", style = body(15.sp, color = C.TextMid), modifier = Modifier.align(Alignment.Center))
@@ -359,12 +381,101 @@ fun LyricsScreen(nav: Nav, sheet: Boolean = false) {
                     else -> LazyColumn(contentPadding = PaddingValues(24.dp)) { item { Text((l.plain ?: "").let { if (settings.lyricsHinglish) Hinglish.convert(it) else it }, style = body(20.sp, FontWeight.SemiBold, C.TextHi).copy(lineHeight = 32.sp)) } }
                 }
             }
-            if (t != null && lyrics?.synced != null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Timing", style = body(13.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
+            // Lyrics without timing: one pass of tapping makes them scroll in sync from then on.
+            if (t != null && shown != null && shown.synced == null && !shown.plain.isNullOrBlank() && !shown.instrumental) Row(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("No timed lyrics online", style = body(13.sp, FontWeight.Bold))
+                    Text("Tap once as each line starts; they stay in sync after that.", style = body(11.sp, color = C.TextMid))
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Tap to sync", style = body(13.sp, FontWeight.Bold, C.OnAccent),
+                    modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(C.Amber).clickable { tapping = true }
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .semantics { contentDescription = "Time the lines yourself by tapping as each one starts" },
+                )
+            }
+            if (t != null && shown?.synced != null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Timing", style = body(13.sp, FontWeight.Bold))
+                Spacer(Modifier.width(10.dp))
+                if (!shown.plain.isNullOrBlank()) Text(
+                    "Re-tap", style = body(13.sp, FontWeight.Bold, C.TextHi),
+                    modifier = Modifier.clip(RoundedCornerShape(18.dp)).raised(RoundedCornerShape(18.dp), 4.dp)
+                        .clickable { tapping = true }.padding(horizontal = 12.dp, vertical = 8.dp)
+                        .semantics { contentDescription = "Time the lines again by tapping as each one starts" },
+                )
+                Spacer(Modifier.weight(1f))
                 RoundButton(I.Minus, "Lyrics earlier", { offset -= 250; LyricsRepo.setOffset(t, offset) }, 40.dp)
                 Text("%+.2f s".format(offset / 1000.0), style = mono(13.sp, FontWeight.Bold, C.AmberText), modifier = Modifier.width(84.dp), textAlign = TextAlign.Center)
                 RoundButton(I.Plus, "Lyrics later", { offset += 250; LyricsRepo.setOffset(t, offset) }, 40.dp)
             }
+        }
+    }
+}
+
+/**
+ * Exact timing by hand: the song plays and the listener taps as each line starts. Saved as timed
+ * lyrics for this song, so it scrolls perfectly from then on.
+ */
+@Composable
+private fun TapSync(t: Track, plain: String, playing: Boolean, done: (saved: Boolean) -> Unit) {
+    val lines = remember(plain) { LyricSync.lines(plain) }
+    var times by remember { mutableStateOf(listOf<Long>()) }
+    val list = rememberLazyListState()
+    val next = times.size
+    LaunchedEffect(next) { list.animateScrollToItem((next - 2).coerceAtLeast(0)) }
+    fun save() {
+        LyricsRepo.choose(t, LyricSync.toLrc(lines.mapIndexed { i, s -> LyricLine(times[i], s) }), plain, false, "Tapped")
+        done(true)
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+        Text(
+            if (next == 0) "Play from the start and tap the big button as each line begins." else "Line ${minOf(next + 1, lines.size)} of ${lines.size}",
+            style = body(13.sp, color = C.TextMid),
+        )
+        Spacer(Modifier.height(10.dp))
+        LazyColumn(Modifier.weight(1f), state = list, verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 24.dp)) {
+            itemsIndexed(lines) { i, line ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        times.getOrNull(i)?.let { fmtTime(it) } ?: "",
+                        style = mono(11.sp, color = C.TextLow), modifier = Modifier.width(48.dp),
+                    )
+                    Text(
+                        Hinglish.takeIf { AppState.settings.value.lyricsHinglish }?.convert(line) ?: line,
+                        style = body(if (i == next) 22.sp else 18.sp, if (i == next) FontWeight.Bold else FontWeight.SemiBold, if (i == next) C.AmberLight else if (i < next) C.TextLow else C.TextHi),
+                    )
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            RoundButton(I.Close, "Cancel", { done(false) }, 44.dp)
+            RoundButton(I.Back, "Undo the last tap", { if (times.isNotEmpty()) { times = times.dropLast(1); Playback.seekTo((times.lastOrNull() ?: 0L)) } }, 44.dp)
+            Box(
+                Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(28.dp)).background(C.Amber)
+                    .clickable {
+                        if (next == 0 && !playing) { Playback.seekTo(0); Playback.toggle(); return@clickable }
+                        if (next < lines.size) times = times + Playback.positionNow()
+                        if (times.size == lines.size) save()
+                    }
+                    .semantics { contentDescription = if (next == 0 && !playing) "Start the song" else "This line starts now" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    when { next == 0 && !playing -> "Start the song"; next >= lines.size -> "Done"; else -> "Line starts now" },
+                    style = body(16.sp, FontWeight.Bold, C.OnAccent),
+                )
+            }
+            if (next in 1 until lines.size) RoundButton(I.Check, "Save what is tapped so far", {
+                // Untapped lines keep the estimated spacing after the last tap.
+                val last = times.last()
+                val rest = (lines.size - times.size)
+                val step = 3000L
+                times = times + List(rest) { last + step * (it + 1) }
+                save()
+            }, 44.dp)
         }
     }
 }
@@ -422,11 +533,7 @@ private fun LyricsSearch(t: Track, done: () -> Unit) {
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         val sample = c.synced ?: c.plain ?: ""
-                        val script = when {
-                            sample.any { it in '\u0900'..'\u097F' || it in '\u0A00'..'\u0A7F' } -> "Hindi script"
-                            sample.any { it.isLetter() } -> "Roman"
-                            else -> ""
-                        }
+                        val script = Hinglish.scriptName(sample)?.let { "$it script" } ?: if (sample.any { it.isLetter() }) "Roman" else ""
                         if (script.isNotBlank()) Text(script, style = body(11.sp, color = C.TextMid))
                         Text(if (c.synced != null) "Synced" else if (c.instrumental) "Instrumental" else "Plain", style = body(12.sp, FontWeight.Bold, if (c.synced != null) C.AmberText else C.TextMid))
                         Text("${fmtTime((c.durationSec * 1000).toLong())}${if (diff <= 3) " ✓" else ""}", style = mono(11.sp, color = if (diff <= 3) C.OkText else C.TextMid))
@@ -545,6 +652,10 @@ fun QualityLine(t: Track) {
             Text("DECODING & OUTPUT", style = eyebrow(), modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 2.dp))
             DetailRow("Mode", when {
                 st.usb -> if (st.untouched) "USB DAC, bit-perfect" else "USB DAC, with effects"
+                st.phoneDirect -> "Direct (phone): ${if (st.untouched) "untouched" else "converted to ${khz(st.dacRate)} kHz by the app"}, no phone processing"
+                s.output == "direct" -> "Phone (direct output not available right now)"
+                s.output == "usb_android" && AndroidBitPerfect.active.isNotEmpty() -> "Untouched (Android USB): ${AndroidBitPerfect.active}"
+                s.output == "usb_android" -> "Phone (Android bit-perfect not available for this song)"
                 s.output == "usb" -> "Phone (no DAC plugged in)"
                 s.output == "offload" && !path.offload -> "Phone (Battery saver doesn't take this file type)"
                 else -> mode.title

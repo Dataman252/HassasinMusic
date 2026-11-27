@@ -129,7 +129,12 @@ class UsbDacSession private constructor(
     val device: UsbDevice,
     private val conn: UsbDeviceConnection,
     val layout: DacLayout,
-) {
+) : DirectOut {
+    override val kind = "usb"
+    override val outRate get() = rate
+    override val outBits get() = current?.bits ?: 32
+    override val outName get() = device.productName ?: "USB DAC"
+    override fun startAt(hz: Int): Boolean = start(hz)
     private val claimed = mutableListOf<UsbInterface>()
     private var handle = 0L
     var current: DacLayout.Alt? = null
@@ -250,7 +255,7 @@ class UsbDacSession private constructor(
     }
 
     /** Sets the DAC's own volume on every channel; returns the value it took, in dB. */
-    fun setVolumeDb(db: Double): Double? {
+    override fun setVolumeDb(db: Double): Double? {
         val range = volumeRange ?: return null
         volumeDb = db
         val clamped = db.coerceIn(range.first, range.second)
@@ -337,19 +342,19 @@ class UsbDacSession private constructor(
         return ok
     }
 
-    fun write(data: ByteArray, offset: Int, length: Int): Int = if (handle != 0L) UsbAudioNative.write(handle, data, offset, length) else -1
-    fun ringFrames(): Long = if (handle != 0L) UsbAudioNative.ringFrames(handle) else 0
+    override fun write(data: ByteArray, offset: Int, length: Int): Int = if (handle != 0L) UsbAudioNative.write(handle, data, offset, length) else -1
+    override fun ringFrames(): Long = if (handle != 0L) UsbAudioNative.ringFrames(handle) else 0
     fun queuedFrames(): Long = if (handle != 0L) UsbAudioNative.queuedFrames(handle) else 0
-    fun framesPlayed(): Long = if (handle != 0L) UsbAudioNative.framesPlayed(handle) else 0
-    fun underruns(): Long = if (handle != 0L) UsbAudioNative.underruns(handle) else 0
-    fun maxGapUs(): Long = if (handle != 0L) UsbAudioNative.maxGapUs(handle) else 0
+    override fun framesPlayed(): Long = if (handle != 0L) UsbAudioNative.framesPlayed(handle) else 0
+    override fun underruns(): Long = if (handle != 0L) UsbAudioNative.underruns(handle) else 0
+    override fun maxGapUs(): Long = if (handle != 0L) UsbAudioNative.maxGapUs(handle) else 0
     fun cpuMask(): Int = if (handle != 0L) UsbAudioNative.cpuMask(handle) else 0
     fun priorityResult(): Int = if (handle != 0L) UsbAudioNative.priorityResult(handle) else -1
     fun latePackets(): Long = if (handle != 0L) UsbAudioNative.latePackets(handle) else 0
     fun minInFlight(): Int = if (handle != 0L) UsbAudioNative.minInFlight(handle) else 0
-    fun isRunning(): Boolean = handle != 0L && UsbAudioNative.isRunning(handle)
-    fun setPaused(p: Boolean) { if (handle != 0L) UsbAudioNative.setPaused(handle, p) }
-    fun flush() { if (handle != 0L) UsbAudioNative.flush(handle) }
+    override fun isRunning(): Boolean = handle != 0L && UsbAudioNative.isRunning(handle)
+    override fun setPaused(p: Boolean) { if (handle != 0L) UsbAudioNative.setPaused(handle, p) }
+    override fun flush() { if (handle != 0L) UsbAudioNative.flush(handle) }
 
     private fun stopStream() {
         if (handle != 0L) {
@@ -360,7 +365,7 @@ class UsbDacSession private constructor(
     }
 
     /** Stops, then hands the DAC back to Android. */
-    fun close() {
+    override fun close() {
         hide()
         stopStream()
         runCatching { altInterface(0)?.let { conn.setInterface(it) } }

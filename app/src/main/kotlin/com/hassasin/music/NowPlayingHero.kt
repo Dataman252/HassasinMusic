@@ -76,10 +76,13 @@ fun rememberArtBitmap(album: Album?, size: Int = 1000): Bitmap? {
 object Sharpen {
     private val cache = android.util.LruCache<String, Bitmap>(6)
 
-    fun cached(key: String, src: Bitmap, amount: Int): Bitmap? = cache.get("$key|${src.width}|$amount")
+    // Keyed by the picture itself too: a newly chosen cover for the same album must not get the old one back.
+    private fun id(key: String, src: Bitmap, amount: Int) = "$key|${System.identityHashCode(src)}|${src.width}|$amount"
+
+    fun cached(key: String, src: Bitmap, amount: Int): Bitmap? = cache.get(id(key, src, amount))
 
     fun apply(key: String, src: Bitmap, amount: Int): Bitmap {
-        val id = "$key|${src.width}|$amount"
+        val id = id(key, src, amount)
         cache.get(id)?.let { return it }
         val out = process(src, amount / 100f)
         cache.put(id, out)
@@ -253,11 +256,13 @@ private fun CompactSignal(st: PlayState, s: AppSettings, onClick: () -> Unit) {
     val effects = Eq.anyEffect(s.sound, st.usb) && !(s.output == "offload" && !st.usb)
     val label = when {
         st.usb -> if (st.untouched) "Bit-perfect" else "USB DAC + effects"
+        st.phoneDirect -> if (st.untouched) "Direct · untouched" else if (effects) "Direct + effects" else "Direct"
+        s.output == "usb_android" && AndroidBitPerfect.active.isNotEmpty() -> "Bit-perfect (Android)"
         s.output == "offload" && path.offload -> "Battery saver"
         s.output == "hires" && !effects -> "Hi-Res"
         else -> if (effects) "Phone + effects" else "Phone"
     }
-    val dot = when { st.usb && st.untouched -> C.Ok; effects -> C.Amber; else -> Color.White.copy(alpha = 0.55f) }
+    val dot = when { (st.usb || st.phoneDirect) && st.untouched -> C.Ok; s.output == "usb_android" && AndroidBitPerfect.active.isNotEmpty() -> C.Ok; effects -> C.Amber; else -> Color.White.copy(alpha = 0.55f) }
     val dest = if (st.usb) "${st.dacName.ifBlank { "DAC" }.split(' ').last()} ${khz(st.dacRate)}k" else remember(path.updatedAt, st.current?.id) { AudioPathInfo.deviceShort(context) }
     val shape = RoundedCornerShape(999.dp)
     Row(
