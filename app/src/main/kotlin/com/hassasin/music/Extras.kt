@@ -128,6 +128,11 @@ object AutoResume {
 /** What changed in each version, shown once after an update and in Credits. */
 object Changelog {
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.9.3" to listOf(
+            "Page turn: the cover turns like a notebook page, in the direction you swipe",
+            "Circle reveal and Straight reveal: the next cover opens through a growing circle or a sweeping edge",
+            "Help improve now sends reports by itself when you allow it",
+        ),
         "0.9.2" to listOf("Fade, Zoom and Flip now play while you swipe the cover, following your finger"),
         "0.9.1" to listOf(
             "Plays count only after 30 seconds of listening; every song shows its play count, playlists their total",

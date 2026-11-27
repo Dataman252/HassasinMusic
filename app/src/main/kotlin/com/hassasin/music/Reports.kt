@@ -40,7 +40,7 @@ import java.io.File
  */
 object Reports {
     /** The Google Sheet's Apps Script web app (docs/report-sheet.gs). Empty: reports are shared by hand. */
-    const val URL = ""
+    const val URL = "https://script.google.com/macros/s/AKfycbwk_YD-fMqvsmF-TEMPzFBDd8OscqoqVddVqDlL3NCXPmtA9M-IJo_F8WjG2ebPxYki/exec"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var lastErrorAt = 0L

@@ -400,6 +400,8 @@ private fun WhatsNew() {
             Spacer(Modifier.height(14.dp))
             // Asked once: may the app send anonymous reports, so problems can be fixed without asking?
             val s by AppState.settings.collectAsState()
+            val reportScope = androidx.compose.runtime.rememberCoroutineScope()
+            var sentNote by remember { mutableStateOf("") }
             Column(Modifier.fillMaxWidth().recessed(RoundedCornerShape(16.dp)).padding(12.dp)) {
                 Text("Help improve Hassasin Music", style = body(14.sp, FontWeight.Bold))
                 Text("Send anonymous reports (phone model, Android version, output formats, errors). Never song names, file paths or accounts.", style = body(12.sp, color = C.TextMid).copy(lineHeight = 17.sp))
@@ -407,7 +409,10 @@ private fun WhatsNew() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Chip(if (s.helpImprove == 1) "Allowed ✓" else "Allow", s.helpImprove == 1) { AppState.update { it.copy(helpImprove = 1) } }
                     Chip("No thanks", s.helpImprove == 2) { AppState.update { it.copy(helpImprove = 2) } }
-                    Chip("Send a report", false) { OutputChain.share(context, OutputChain.report(context)) }
+                    Chip(sentNote.ifBlank { "Send a report" }, false) {
+                        if (!Reports.canSend()) OutputChain.share(context, OutputChain.report(context))
+                        else { sentNote = "Sending…"; reportScope.launch { sentNote = if (Reports.send(context, "manual", null)) "Sent ✓" else "Not sent" } }
+                    }
                 }
             }
             Spacer(Modifier.height(14.dp))

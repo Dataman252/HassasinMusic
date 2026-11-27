@@ -1,5 +1,7 @@
 package com.hassasin.music
 
+import androidx.compose.ui.zIndex
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
@@ -920,30 +922,67 @@ fun CoverPager(st: PlayState, page: @Composable (Track, Boolean) -> Unit) {
     val gap = 16.dp
     androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, pageSpacing = gap) { i ->
         val song = queue.getOrNull(i) ?: return@HorizontalPager
-        Box(Modifier.fillMaxSize().graphicsLayer {
-            // o: 0 = in place, +1 = one page to the left (leaving), -1 = one page to the right (coming).
-            val o = ((pager.currentPage - i) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
-            val a = kotlin.math.abs(o)
-            // Fade, Zoom and Flip keep both covers in the same place (no sliding); only Slide moves.
-            val pin = o * (size.width + gap.toPx())
-            when (style) {
-                "fade" -> { translationX = pin; alpha = 1f - a }
-                "zoom" -> {
-                    translationX = pin
-                    // The cover to the right comes from 125 % and settles; the one to the left shrinks away.
-                    val z = if (o < 0) 1f + 0.25f * a else 1f - 0.2f * a
-                    scaleX = z; scaleY = z; alpha = 1f - a
+        // o: 0 = in place, +1 = one page to the left (earlier song), -1 = one page to the right (next song).
+        fun off() = ((pager.currentPage - i) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
+        Box(
+            Modifier.fillMaxSize()
+                // Notebook: the earlier song is the page on top, so it can turn over the next one.
+                .then(if (style == "flip") Modifier.zIndex(-i.toFloat()) else Modifier)
+                .graphicsLayer {
+                    val o = off()
+                    val a = kotlin.math.abs(o)
+                    // Fade, Zoom, Flip and Reveal keep both covers in the same place; only Slide moves.
+                    val pin = o * (size.width + gap.toPx())
+                    when (style) {
+                        "fade" -> { translationX = pin; alpha = 1f - a }
+                        "zoom" -> {
+                            translationX = pin
+                            // The cover to the right comes from 125 % and settles; the one to the left shrinks away.
+                            val z = if (o < 0) 1f + 0.25f * a else 1f - 0.2f * a
+                            scaleX = z; scaleY = z; alpha = 1f - a
+                        }
+                        "flip" -> {
+                            translationX = pin
+                            if (o > 0f) {
+                                // Turned like a notebook page, hinged on the left edge: swipe left and it turns
+                                // over to the left; swipe right and the page turns back over the cover.
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                                cameraDistance = 9f * density
+                                rotationY = -o * 90f
+                            }
+                        }
+                        "mask" -> {
+                            translationX = pin
+                            if (o < 0f) {
+                                // The next cover is revealed through a circle growing from the side you swipe from.
+                                val r = (1f - a) * kotlin.math.hypot(size.width, size.height)
+                                shape = androidx.compose.foundation.shape.GenericShape { sz, _ ->
+                                    addOval(androidx.compose.ui.geometry.Rect(androidx.compose.ui.geometry.Offset(sz.width, sz.height / 2f), r))
+                                }
+                                clip = true
+                            } else { val z = 1f - 0.08f * a; scaleX = z; scaleY = z }
+                        }
+                        "wipe" -> {
+                            translationX = pin
+                            if (o < 0f) {
+                                // The next cover is revealed behind a straight edge sweeping across from the side you swipe from.
+                                shape = androidx.compose.foundation.shape.GenericShape { sz, _ ->
+                                    addRect(androidx.compose.ui.geometry.Rect(sz.width * a, 0f, sz.width, sz.height))
+                                }
+                                clip = true
+                            } else { val z = 1f - 0.05f * a; scaleX = z; scaleY = z }
+                        }
+                        else -> { val sc = 1f - a * 0.12f; scaleX = sc; scaleY = sc; alpha = 1f - a * 0.5f }
+                    }
                 }
-                "flip" -> {
-                    translationX = pin
-                    cameraDistance = 14f * density
-                    // Half a turn: the old cover turns away to 90 degrees, then the new one turns in from 90.
-                    rotationY = o * 180f
-                    alpha = if (a <= 0.5f) 1f else 0f
-                }
-                else -> { val sc = 1f - a * 0.12f; scaleX = sc; scaleY = sc; alpha = 1f - a * 0.5f }
-            }
-        }) { page(song, i == st.index) }
+                .drawWithContent {
+                    drawContent()
+                    // Shade: the turning page darkens as it turns away; the covered cover darkens under the reveal.
+                    val o = off()
+                    val shade = when (style) { "flip" -> if (o > 0f) 0.55f * o else 0.35f * -o; "mask", "wipe" -> if (o > 0f) 0.5f * o else 0f; else -> 0f }
+                    if (shade > 0.01f) drawRect(Color.Black.copy(alpha = shade))
+                },
+        ) { page(song, i == st.index) }
     }
 }
 

@@ -472,7 +472,7 @@ fun SettingsPageScreen(nav: Nav, key: String) {
                     }
                     item { ChoiceRow("Visualizer", listOf("off" to "Off", "wave" to "Wave", "bars" to "Bars", "mirror" to "Mirror"), s.vizStyle) { k -> AppState.update { it.copy(vizStyle = k) } } }
                     item { ChoiceRow("Seek bar", SeekStyles.ALL, s.seekStyle, "Sits behind the play controls; tap or drag anywhere on it to move through the song.") { k -> AppState.update { it.copy(seekStyle = k) } } }
-                    item { ChoiceRow("Cover on song change", listOf("slide" to "Slide", "fade" to "Fade", "zoom" to "Zoom", "flip" to "Flip"), s.coverAnim) { k -> AppState.update { it.copy(coverAnim = k) } } }
+                    item { ChoiceRow("Cover on song change", listOf("slide" to "Slide", "fade" to "Fade", "zoom" to "Zoom", "flip" to "Page turn", "mask" to "Circle reveal", "wipe" to "Straight reveal"), s.coverAnim) { k -> AppState.update { it.copy(coverAnim = k) } } }
                     item { Column(Modifier.fillMaxWidth().raised().padding(14.dp)) { CoverSharpness(s.artSharpness) } }
                 }
                 "playback" -> {
