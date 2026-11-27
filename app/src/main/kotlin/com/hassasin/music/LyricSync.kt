@@ -13,6 +13,23 @@ object LyricSync {
     /** Lines worth timing: blank lines (stanza breaks) and labels like "[Chorus]" are skipped. */
     fun lines(plain: String): List<String> = plain.lines().map { it.trim() }.filter { it.isNotEmpty() && !label.matches(it) }
 
+    /**
+     * Times for every line from the pinned ones: lines between two pins share the gap evenly; lines
+     * before the first pin lead up to it 3 s apart; lines after the last pin follow 3 s apart.
+     */
+    fun fillGaps(times: List<Long?>, durationMs: Long): List<Long> {
+        val out = times.toMutableList()
+        val pinned = out.indices.filter { out[it] != null }
+        if (pinned.isEmpty()) return out.indices.map { it * 3000L }
+        val first = pinned.first(); val last = pinned.last()
+        for (i in 0 until first) out[i] = (out[first]!! - 3000L * (first - i)).coerceAtLeast(0)
+        for (i in last + 1 until out.size) out[i] = (out[last]!! + 3000L * (i - last)).coerceAtMost(durationMs)
+        for ((a, b) in pinned.zipWithNext()) for (i in a + 1 until b) out[i] = out[a]!! + (out[b]!! - out[a]!!) * (i - a) / (b - a)
+        // Keep the order even if pins were dragged past each other.
+        val sorted = out.map { it!! }
+        return sorted.runningReduce { prev, cur -> maxOf(prev, cur) }
+    }
+
     /** Writes lines as LRC text, for keeping tapped timings. */
     fun toLrc(lines: List<LyricLine>): String = lines.joinToString("\n") { l ->
         val ms = l.timeMs.coerceAtLeast(0)

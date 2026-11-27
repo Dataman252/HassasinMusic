@@ -41,11 +41,12 @@ object Waveform {
     /** Loudness 20 times a second, for the lyric-sync timeline (decoded once per song, kept in memory). */
     suspend fun fine(t: Track): FloatArray? = withContext(Dispatchers.IO) {
         fineMemory[t.id]?.let { return@withContext it }
-        val bars = (t.durationMs / 50).toInt().coerceIn(BARS, 20 * 60 * 30)
-        runCatching { decode(t, bars) }.getOrNull()?.also { synchronized(fineMemory) { fineMemory.clear(); fineMemory[t.id] = it } }
+        // 100 points a second, each the loudest sample in its 10 ms: a real waveform, as editors draw it.
+        val bars = (t.durationMs / 10).toInt().coerceIn(BARS, 100 * 60 * 30)
+        runCatching { decode(t, bars, peakMode = true) }.getOrNull()?.also { synchronized(fineMemory) { fineMemory.clear(); fineMemory[t.id] = it } }
     }
 
-    private suspend fun decode(t: Track, BARS: Int = Waveform.BARS): FloatArray? {
+    private suspend fun decode(t: Track, BARS: Int = Waveform.BARS, peakMode: Boolean = false): FloatArray? {
         val ex = MediaExtractor()
         try {
             ex.setDataSource(t.path)
@@ -62,6 +63,7 @@ object Waveform {
             var inputDone = false
             var outFloat = false
             var channels = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            var rate = fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(1)
             try {
                 while (true) {
                     coroutineContext.ensureActive()
@@ -78,6 +80,7 @@ object Waveform {
                     if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         val of = codec.outputFormat
                         channels = of.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                        if (of.containsKey(MediaFormat.KEY_SAMPLE_RATE)) rate = of.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(1)
                         outFloat = of.containsKey(MediaFormat.KEY_PCM_ENCODING) && of.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
                     } else if (o >= 0) {
                         val buf = codec.getOutputBuffer(o)!!.order(ByteOrder.LITTLE_ENDIAN)
@@ -86,17 +89,33 @@ object Waveform {
                         val frameBytes = (if (outFloat) 4 else 2) * channels
                         var p = info.offset
                         val end = info.offset + info.size
+                        var frame = 0L
                         while (p + frameBytes <= end) {
                             val v = if (outFloat) buf.getFloat(p).toDouble() else buf.getShort(p) / 32768.0
-                            sums[bar] += v * v; counts[bar]++
-                            p += frameBytes * 8
+                            if (peakMode) {
+                                // Each sample goes to the 10 ms slot it really plays in (a decoded chunk spans many slots).
+                                val us = info.presentationTimeUs + frame * 1_000_000L / rate
+                                val b2 = ((us.toDouble() / durUs.coerceAtLeast(1)) * BARS).toInt().coerceIn(0, BARS - 1)
+                                sums[b2] += v * v; counts[b2]++
+                                frame += 2
+                            } else { sums[bar] += v * v; counts[bar]++ }
+                            p += frameBytes * (if (peakMode) 2 else 8)
                         }
                         codec.releaseOutputBuffer(o, false)
                         if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
                     }
                 }
             } finally { codec.stop(); codec.release() }
-            val rms = FloatArray(BARS) { if (counts[it] > 0) sqrt(sums[it] / counts[it]).toFloat() else 0f }
+            val rms = FloatArray(BARS) { if (counts[it] == 0) 0f else sqrt(sums[it] / counts[it]).toFloat() }
+            if (peakMode) {
+                // Loudness in dB, stretched between the song's quiet and loud parts: on loud masters the
+                // shape of each sung syllable and beat stays visible instead of a solid block.
+                val db = FloatArray(BARS) { (20 * kotlin.math.log10(rms[it].coerceAtLeast(1e-5f))) }
+                val sorted = db.sortedArray()
+                val lo = sorted[(BARS * 0.08).toInt()]; val hi = sorted[(BARS * 0.995).toInt().coerceAtMost(BARS - 1)]
+                val span = (hi - lo).coerceAtLeast(6f)
+                return FloatArray(BARS) { ((db[it] - lo) / span).coerceIn(0f, 1f).let { v -> v * v } }
+            }
             val peak = rms.fold(0f) { a, b -> max(a, abs(b)) }.coerceAtLeast(1e-4f)
             return FloatArray(BARS) { (rms[it] / peak).coerceIn(0f, 1f) }
         } finally { ex.release() }

@@ -456,112 +456,130 @@ fun LyricsScreen(nav: Nav, sheet: Boolean = false) {
 }
 
 /**
- * Exact timing by hand. The song plays and the listener taps as each line starts; every tap drops a
- * pin on a zoomed timeline of the song's sound. Pins can be dragged to the exact spot, and dragging
- * the timeline scrubs the song. Saved as timed lyrics for this song, so it scrolls in sync from then on.
- * Lyrics that already have timing open with their pins in place, ready to adjust.
+ * Timing lyrics by hand. Play the song and tap a lyric line the moment it is sung: that line is pinned
+ * to that moment (any line, in any order). Pins sit on a real waveform of the song and can be dragged;
+ * the timeline scrubs; play/pause, ±5 s and the exact time are always at hand. Lines not pinned yet are
+ * placed evenly between their pinned neighbours when saving. Timed lyrics open with their pins in place.
  */
 @Composable
 private fun TapSync(t: Track, plain: String, playing: Boolean, existing: List<LyricLine>?, done: (saved: Boolean) -> Unit) {
     val lines = remember(plain) { LyricSync.lines(plain) }
-    val start = remember(existing, lines) {
-        existing?.filter { it.text.isNotBlank() }?.takeIf { it.size == lines.size }?.map { it.timeMs } ?: emptyList()
+    var times by remember(lines) {
+        val have = existing?.filter { it.text.isNotBlank() }?.takeIf { it.size == lines.size }?.map { it.timeMs }
+        mutableStateOf<List<Long?>>(have ?: List(lines.size) { null })
     }
-    var times by remember { mutableStateOf(start) }
-    var selected by remember { mutableIntStateOf(if (start.isEmpty()) -1 else 0) }
+    var selected by remember { mutableIntStateOf(-1) }
     val list = rememberLazyListState()
-    val next = times.size
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val peaks by produceState<FloatArray?>(null, t.id) { value = Waveform.fine(t) }
     var pos by remember { mutableLongStateOf(Playback.positionNow()) }
     LaunchedEffect(Unit) { while (true) { pos = Playback.positionNow(); kotlinx.coroutines.delay(33) } }
+    val nextUnpinned = times.indexOfFirst { it == null }
+    val pinnedCount = times.count { it != null }
+    // The line being sung now (by the pins), so the list can follow along.
+    val singing = times.indices.lastOrNull { i -> times[i]?.let { it <= pos } == true } ?: -1
+    LaunchedEffect(singing, nextUnpinned) {
+        val focus = if (singing >= 0) singing else nextUnpinned
+        if (focus >= 0) list.animateScrollToItem((focus - 2).coerceAtLeast(0))
+    }
+    fun pin(i: Int, at: Long = Playback.positionNow() - LyricSync.REACTION_MS) {
+        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+        times = times.toMutableList().also { it[i] = at.coerceIn(0, t.durationMs) }
+        selected = i
+    }
+    fun move(i: Int, ms: Long) { times = times.toMutableList().also { it[i] = ms.coerceIn(0, t.durationMs) } }
     fun save() {
-        LyricsRepo.choose(t, LyricSync.toLrc(lines.mapIndexed { i, s -> LyricLine(times[i], s) }), plain, false, "Tapped")
+        val filled = LyricSync.fillGaps(times, t.durationMs)
+        LyricsRepo.choose(t, LyricSync.toLrc(lines.mapIndexed { i, s -> LyricLine(filled[i], s) }), plain, false, "Tapped")
         done(true)
     }
-    fun tap() {
-        if (next == 0 && !playing) { Playback.seekTo(0); Playback.toggle(); return }
-        if (next >= lines.size) return
-        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-        // People tap about a fifth of a second after they hear a line start: taken off, so lines are on time.
-        val at = (Playback.positionNow() - LyricSync.REACTION_MS).coerceAtLeast(times.lastOrNull()?.plus(1) ?: 0L)
-        times = times + at
-        selected = times.lastIndex
-    }
-    fun move(i: Int, ms: Long) {
-        val lo = times.getOrNull(i - 1)?.plus(50) ?: 0L
-        val hi = times.getOrNull(i + 1)?.minus(50) ?: t.durationMs
-        times = times.toMutableList().also { it[i] = ms.coerceIn(lo, maxOf(lo, hi)) }
-    }
-    LaunchedEffect(next) { if (start.isEmpty()) list.animateScrollToItem((next - 2).coerceAtLeast(0)) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Text(
-            when {
-                next < lines.size -> "Tap the lyrics as each line begins: a pin drops on the timeline. Drag a pin to fine-tune; drag the timeline to scrub."
-                else -> "All lines pinned. Tap a line to hear it, drag its pin to fine-tune, then save."
-            },
-            style = body(12.sp, color = C.TextMid),
+            "Play the song and tap a line when it is sung. Drag pins on the waveform to fine-tune.",
+            style = body(12.sp, color = C.TextMid), modifier = Modifier.padding(horizontal = 4.dp),
         )
-        Spacer(Modifier.height(8.dp))
-        LazyColumn(
-            Modifier.weight(1f).pointerInput(next, playing) { detectTapGestures { tap() } },
-            state = list, verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 16.dp),
-        ) {
+        Spacer(Modifier.height(6.dp))
+        LazyColumn(Modifier.weight(1f), state = list, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(vertical = 10.dp)) {
             itemsIndexed(lines) { i, line ->
+                val at = times[i]
                 val sel = i == selected
+                val now = i == singing
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                        .then(if (sel) Modifier.background(C.Amber.copy(alpha = 0.14f)) else Modifier)
-                        // A pinned line: tap to select it and hear it from just before its pin.
-                        .then(if (i < times.size) Modifier.clickable { selected = i; Playback.seekTo((times[i] - 1500).coerceAtLeast(0)) } else Modifier)
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .background(
+                            when {
+                                sel -> C.Amber.copy(alpha = 0.18f)
+                                now -> Color.White.copy(alpha = 0.06f)
+                                else -> Color.Transparent
+                            },
+                        )
+                        .clickable { pin(i) }
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                        .semantics { contentDescription = "Line ${i + 1}: $line. Tap to pin it at the current moment" },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(times.getOrNull(i)?.let { fmtTimeMs(it) } ?: "", style = mono(11.sp, color = if (sel) C.AmberText else C.TextLow), modifier = Modifier.width(64.dp))
+                    Box(
+                        Modifier.size(width = 62.dp, height = 26.dp).clip(RoundedCornerShape(13.dp))
+                            .background(if (at != null) C.Amber.copy(alpha = if (sel) 1f else 0.25f) else Color.White.copy(alpha = 0.06f))
+                            // Tap the time to hear the line from just before its pin.
+                            .clickable(enabled = at != null) { selected = i; Playback.seekTo(((at ?: 0) - 1500).coerceAtLeast(0)); if (!playing) Playback.toggle() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(at?.let { fmtTimeMs(it) } ?: "${i + 1}", style = mono(11.sp, FontWeight.Bold, if (at != null && sel) C.OnAccent else if (at != null) C.AmberText else C.TextLow))
+                    }
+                    Spacer(Modifier.width(10.dp))
                     Text(
                         Hinglish.takeIf { AppState.settings.value.lyricsHinglish }?.convert(line) ?: line,
-                        style = body(if (i == next) 20.sp else 17.sp, if (i == next || sel) FontWeight.Bold else FontWeight.SemiBold, if (i == next) C.AmberLight else if (i < next) C.TextMid else C.TextHi),
+                        style = body(if (now) 19.sp else 17.sp, if (now || sel) FontWeight.Bold else FontWeight.SemiBold, if (now) C.AmberLight else if (at != null) C.TextHi else C.TextMid),
                     )
                 }
             }
         }
-        SyncTimeline(peaks, t.durationMs, pos, times, selected, onSeek = { Playback.seekTo(it) }, onSelect = { selected = it }, onMove = { i, ms -> move(i, ms) })
-        if (selected in times.indices) Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            Text("Line ${selected + 1}", style = body(12.sp, FontWeight.Bold, C.AmberText))
+        SyncTimeline(
+            peaks, t.durationMs, pos, times, selected,
+            onSeek = { Playback.seekTo(it) }, onSelect = { selected = it }, onMove = { i, ms -> move(i, ms) },
+        )
+        // Transport: back 5 s, play/pause, forward 5 s, and the exact time.
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("${fmtTimeMs(pos)} / ${fmtTime(t.durationMs)}", style = mono(13.sp, FontWeight.Bold, C.AmberText), modifier = Modifier.width(118.dp))
+            Spacer(Modifier.weight(1f))
+            Text("−5 s", style = body(13.sp, FontWeight.Bold), modifier = Modifier.clip(RoundedCornerShape(16.dp)).raised(RoundedCornerShape(16.dp), 3.dp).clickable { Playback.seekTo((Playback.positionNow() - 5000).coerceAtLeast(0)) }.padding(horizontal = 12.dp, vertical = 8.dp))
             Spacer(Modifier.width(10.dp))
-            listOf(-100L to "−0.1 s", 100L to "+0.1 s").forEach { (d, label) ->
-                Text(label, style = body(12.sp, FontWeight.Bold), modifier = Modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(14.dp)).raised(RoundedCornerShape(14.dp), 3.dp).clickable { move(selected, times[selected] + d) }.padding(horizontal = 10.dp, vertical = 6.dp))
-            }
-            Text("Pin here", style = body(12.sp, FontWeight.Bold), modifier = Modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(14.dp)).raised(RoundedCornerShape(14.dp), 3.dp).clickable { move(selected, Playback.positionNow() - LyricSync.REACTION_MS) }.padding(horizontal = 10.dp, vertical = 6.dp))
-        }
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            RoundButton(I.Close, "Cancel", { done(false) }, 44.dp)
-            RoundButton(I.Back, "Undo the last pin", {
-                if (times.isNotEmpty() && next <= lines.size && start.isEmpty()) {
-                    // Back to 3 s before the line being redone, so it can be heard coming.
-                    val redo = times.last()
-                    times = times.dropLast(1)
-                    selected = times.lastIndex
-                    Playback.seekTo((redo - 3000).coerceAtLeast(times.lastOrNull() ?: 0L))
-                }
-            }, 44.dp)
             Box(
-                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(26.dp)).background(C.Amber)
-                    .clickable { if (next >= lines.size) save() else tap() }
-                    .semantics { contentDescription = when { next >= lines.size -> "Save the timing"; next == 0 && !playing -> "Start the song"; else -> "This line starts now" } },
+                Modifier.size(52.dp).amberOrb().clip(CircleShape).clickable { Playback.toggle() }.semantics { contentDescription = if (playing) "Pause" else "Play" },
+                contentAlignment = Alignment.Center,
+            ) { Ico(if (playing) I.Pause else I.Play, C.OnAccent, 24.dp, filled = true) }
+            Spacer(Modifier.width(10.dp))
+            Text("+5 s", style = body(13.sp, FontWeight.Bold), modifier = Modifier.clip(RoundedCornerShape(16.dp)).raised(RoundedCornerShape(16.dp), 3.dp).clickable { Playback.seekTo(Playback.positionNow() + 5000) }.padding(horizontal = 12.dp, vertical = 8.dp))
+            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(118.dp))
+        }
+        // Fine-tune the selected line.
+        if (selected in times.indices && times[selected] != null) Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Text("Line ${selected + 1}", style = body(12.sp, FontWeight.Bold, C.AmberText))
+            Spacer(Modifier.width(8.dp))
+            listOf(-100L to "−0.1 s", 100L to "+0.1 s").forEach { (d, label) ->
+                Text(label, style = body(12.sp, FontWeight.Bold), modifier = Modifier.padding(horizontal = 3.dp).clip(RoundedCornerShape(14.dp)).raised(RoundedCornerShape(14.dp), 3.dp).clickable { times[selected]?.let { move(selected, it + d) } }.padding(horizontal = 10.dp, vertical = 6.dp))
+            }
+            Text("Remove pin", style = body(12.sp, FontWeight.Bold, C.TextMid), modifier = Modifier.padding(horizontal = 3.dp).clip(RoundedCornerShape(14.dp)).raised(RoundedCornerShape(14.dp), 3.dp).clickable { times = times.toMutableList().also { it[selected] = null } }.padding(horizontal = 10.dp, vertical = 6.dp))
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            RoundButton(I.Close, "Cancel", { done(false) }, 44.dp)
+            // The next line without a pin, for tapping along in order.
+            if (nextUnpinned >= 0) Box(
+                Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(25.dp)).raised(RoundedCornerShape(25.dp), 4.dp)
+                    .clickable { if (!playing && pinnedCount == 0) { Playback.seekTo(0); Playback.toggle() } else pin(nextUnpinned) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    when { next >= lines.size -> "Save timing"; next == 0 && !playing -> "Start the song"; else -> "Line ${next + 1} starts now" },
-                    style = body(15.sp, FontWeight.Bold, C.OnAccent),
-                )
+                Text(if (!playing && pinnedCount == 0) "Start the song" else "Pin line ${nextUnpinned + 1} now", style = body(14.sp, FontWeight.Bold))
             }
-            if (next in 1 until lines.size) RoundButton(I.Check, "Save what is pinned so far", {
-                // Unpinned lines follow the last pin, 3 s apart, until they are timed too.
-                val last = times.last()
-                times = times + List(lines.size - times.size) { last + 3000L * (it + 1) }
-                save()
-            }, 44.dp)
+            Box(
+                Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(25.dp)).background(if (pinnedCount > 0) C.Amber else C.Amber.copy(alpha = 0.3f))
+                    .clickable(enabled = pinnedCount > 0) { save() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(if (nextUnpinned < 0) "Save timing" else "Save ($pinnedCount/${lines.size})", style = body(14.sp, FontWeight.Bold, C.OnAccent))
+            }
         }
     }
 }
@@ -569,74 +587,88 @@ private fun TapSync(t: Track, plain: String, playing: Boolean, existing: List<Ly
 private fun fmtTimeMs(ms: Long) = "%d:%02d.%01d".format(ms / 60000, (ms / 1000) % 60, (ms % 1000) / 100)
 
 /**
- * The sync timeline: 16 seconds of the song's sound around the playhead, with a numbered pin for each
- * timed line. Drag a pin to move its line; drag anywhere else to scrub; tap to jump there.
+ * The sync timeline: 12 seconds of the song's waveform around the playhead (mirrored peaks, the played
+ * part lit), with a numbered pin for each timed line. Drag a pin to move its line; drag elsewhere to
+ * scrub; tap to jump there.
  */
 @Composable
 private fun SyncTimeline(
-    peaks: FloatArray?, durationMs: Long, posMs: Long, times: List<Long>, selected: Int,
+    peaks: FloatArray?, durationMs: Long, posMs: Long, times: List<Long?>, selected: Int,
     onSeek: (Long) -> Unit, onSelect: (Int) -> Unit, onMove: (Int, Long) -> Unit,
 ) {
-    val windowMs = 16_000L
-    val amber = C.Amber; val amberLight = C.AmberLight; val track = C.TextLow; val played = C.TextHi
+    val windowMs = 12_000L
+    val amber = C.Amber; val amberLight = C.AmberLight; val waveLit = C.AmberLight; val wave = Color.White.copy(alpha = 0.35f)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val pinStyle = mono(10.sp, FontWeight.Bold, C.OnAccent)
-    // While scrubbing, the view follows the finger instead of the (seeking) player.
     var scrubAt by remember { mutableStateOf<Long?>(null) }
     val center = scrubAt ?: posMs
-    val left = center - windowMs * 3 / 8
+    val left = center - windowMs / 3
     val current by androidx.compose.runtime.rememberUpdatedState(Triple(left, times, durationMs))
     Box(
-        Modifier.fillMaxWidth().height(96.dp).recessed(RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+        Modifier.fillMaxWidth().height(120.dp).recessed(RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
             .pointerInput(Unit) {
                 var dragging = -1
                 var startLeft = 0L
                 var startX = 0f
-                fun msAt(x: Float, l: Long) = l + (x / size.width * windowMs).toLong()
+                fun xOf(ms: Long, l: Long) = ((ms - l).toFloat() / windowMs) * size.width
                 detectDragGestures(
                     onDragStart = { o ->
                         val (l, ts, _) = current
-                        val hit = ts.indices.minByOrNull { kotlin.math.abs(((ts[it] - l).toFloat() / windowMs) * size.width - o.x) }
-                        dragging = if (hit != null && kotlin.math.abs(((ts[hit] - l).toFloat() / windowMs) * size.width - o.x) < 28.dp.toPx()) hit else -1
+                        val hit = ts.indices.filter { ts[it] != null }.minByOrNull { kotlin.math.abs(xOf(ts[it]!!, l) - o.x) }
+                        dragging = if (hit != null && kotlin.math.abs(xOf(ts[hit]!!, l) - o.x) < 28.dp.toPx()) hit else -1
                         if (dragging >= 0) onSelect(dragging)
                         startLeft = l; startX = o.x
-                        if (dragging < 0) scrubAt = l + windowMs * 3 / 8
+                        if (dragging < 0) scrubAt = l + windowMs / 3
                     },
                     onDragEnd = { scrubAt?.let { onSeek(it.coerceIn(0, current.third)) }; scrubAt = null; dragging = -1 },
                     onDragCancel = { scrubAt = null; dragging = -1 },
                 ) { change, _ ->
                     change.consume()
-                    if (dragging >= 0) onMove(dragging, msAt(change.position.x, current.first))
-                    else scrubAt = (startLeft + windowMs * 3 / 8 - ((change.position.x - startX) / size.width * windowMs).toLong()).coerceIn(0, current.third)
+                    if (dragging >= 0) onMove(dragging, current.first + (change.position.x / size.width * windowMs).toLong())
+                    else scrubAt = (startLeft + windowMs / 3 - ((change.position.x - startX) / size.width * windowMs).toLong()).coerceIn(0, current.third)
                 }
             }
             .pointerInput(Unit) { detectTapGestures { o -> onSeek((current.first + (o.x / size.width * windowMs).toLong()).coerceIn(0, current.third)) } },
     ) {
         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height
-            val barMs = 50L
-            val bars = (windowMs / barMs).toInt()
-            val bw = w / bars
-            for (b in 0 until bars) {
-                val ms = left + b * barMs
-                if (ms < 0 || ms > durationMs) continue
-                val v = peaks?.let { p -> p[((ms.toDouble() / durationMs.coerceAtLeast(1)) * p.size).toInt().coerceIn(0, p.lastIndex)] } ?: 0.2f
-                val bh = (h * 0.62f * (0.08f + 0.92f * v))
-                drawRect(if (ms <= posMs) played.copy(alpha = 0.55f) else track.copy(alpha = 0.6f), androidx.compose.ui.geometry.Offset(b * bw, (h - bh) / 2 + 8f), androidx.compose.ui.geometry.Size(bw * 0.7f, bh))
+            val mid = h * 0.58f
+            val amp = h * 0.36f
+            val px = ((posMs - left).toFloat() / windowMs) * w
+            // Mirrored peak waveform, one thin column per pixel pair.
+            val step = 2f
+            var x = 0f
+            while (x < w) {
+                val ms = left + (x / w * windowMs).toLong()
+                if (ms in 0..durationMs && peaks != null) {
+                    val i = ((ms.toDouble() / durationMs.coerceAtLeast(1)) * peaks.size).toInt().coerceIn(0, peaks.lastIndex)
+                    val v = peaks[i]
+                    val half = (amp * v).coerceAtLeast(1f)
+                    drawLine(if (x <= px) waveLit else wave, androidx.compose.ui.geometry.Offset(x, mid - half), androidx.compose.ui.geometry.Offset(x, mid + half), strokeWidth = 1.6f)
+                }
+                x += step
             }
-            // Pins: a line down through the sound, with the line number in a tag on top.
+            if (peaks == null) drawLine(wave, androidx.compose.ui.geometry.Offset(0f, mid), androidx.compose.ui.geometry.Offset(w, mid), strokeWidth = 2f)
+            // Second marks along the bottom.
+            var s = (left / 1000) * 1000
+            while (s < left + windowMs) {
+                val sx = ((s - left).toFloat() / windowMs) * w
+                if (s >= 0) drawLine(Color.White.copy(alpha = 0.18f), androidx.compose.ui.geometry.Offset(sx, h - 8f), androidx.compose.ui.geometry.Offset(sx, h), strokeWidth = 2f)
+                s += 1000
+            }
+            // Pins: a line through the waveform with the line number in a tag on top.
             times.forEachIndexed { i, ms ->
-                val x = ((ms - left).toFloat() / windowMs) * w
-                if (x < -40f || x > w + 40f) return@forEachIndexed
+                if (ms == null) return@forEachIndexed
+                val x2 = ((ms - left).toFloat() / windowMs) * w
+                if (x2 < -40f || x2 > w + 40f) return@forEachIndexed
                 val col = if (i == selected) amberLight else amber
-                drawLine(col, androidx.compose.ui.geometry.Offset(x, 22f), androidx.compose.ui.geometry.Offset(x, h), strokeWidth = if (i == selected) 5f else 3f)
+                drawLine(col, androidx.compose.ui.geometry.Offset(x2, 24f), androidx.compose.ui.geometry.Offset(x2, h), strokeWidth = if (i == selected) 5f else 3f)
                 val label = measurer.measure("${i + 1}", pinStyle)
-                val tw = label.size.width + 16f; val th = label.size.height + 6f
-                drawRoundRect(col, androidx.compose.ui.geometry.Offset(x - tw / 2, 2f), androidx.compose.ui.geometry.Size(tw, th), androidx.compose.ui.geometry.CornerRadius(th / 2))
-                drawText(label, topLeft = androidx.compose.ui.geometry.Offset(x - label.size.width / 2, 5f))
+                val tw = label.size.width + 18f; val th = label.size.height + 8f
+                drawRoundRect(col, androidx.compose.ui.geometry.Offset(x2 - tw / 2, 2f), androidx.compose.ui.geometry.Size(tw, th), androidx.compose.ui.geometry.CornerRadius(th / 2))
+                drawText(label, topLeft = androidx.compose.ui.geometry.Offset(x2 - label.size.width / 2, 6f))
             }
             // The playhead.
-            val px = ((posMs - left).toFloat() / windowMs) * w
             drawLine(Color.White, androidx.compose.ui.geometry.Offset(px, 0f), androidx.compose.ui.geometry.Offset(px, h), strokeWidth = 3f)
         }
     }
