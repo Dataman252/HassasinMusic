@@ -100,6 +100,8 @@ sealed class Route {
     data object Folders : Route()
     data object Credits : Route()
     data object Playlists : Route()
+    data object GeneratePlaylist : Route()
+    data class SettingsPage(val key: String) : Route()
     data class PlaylistDetail(val id: Long) : Route()
     data class EditTags(val trackId: Long) : Route()
 }
@@ -154,6 +156,8 @@ class MainActivity : ComponentActivity() {
         controller = MediaController.Builder(this, SessionToken(this, ComponentName(this, PlaybackService::class.java))).buildAsync()
         setContent { Root() }
         // New versions come from the app's GitHub releases (checked at most once an hour).
+        Reports.installCrashHandler(this)
+        Reports.onStart(applicationContext)
         lifecycleScope.launch { Updater.check(applicationContext) }
         PhoneDirectSession.checkAvailable()
     }
@@ -259,6 +263,8 @@ class MainActivity : ComponentActivity() {
                                     Route.Folders -> FoldersScreen(nav)
                                     Route.Credits -> CreditsScreen(nav)
                                     Route.Playlists -> PlaylistsScreen(nav)
+                                    Route.GeneratePlaylist -> GeneratorScreen(nav)
+                                    is Route.SettingsPage -> SettingsPageScreen(nav, r.key)
                                     is Route.PlaylistDetail -> PlaylistScreen(nav, r.id)
                                     is Route.EditTags -> TagEditorScreen(nav, r.trackId)
                                     else -> LibraryHub(nav)
@@ -388,7 +394,20 @@ private fun WhatsNew() {
                     Text(line, style = body(14.sp).copy(lineHeight = 20.sp))
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
+            // Asked once: may the app send anonymous reports, so problems can be fixed without asking?
+            val s by AppState.settings.collectAsState()
+            Column(Modifier.fillMaxWidth().recessed(RoundedCornerShape(16.dp)).padding(12.dp)) {
+                Text("Help improve Hassasin Music", style = body(14.sp, FontWeight.Bold))
+                Text("Send anonymous reports (phone model, Android version, output formats, errors). Never song names, file paths or accounts.", style = body(12.sp, color = C.TextMid).copy(lineHeight = 17.sp))
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip(if (s.helpImprove == 1) "Allowed ✓" else "Allow", s.helpImprove == 1) { AppState.update { it.copy(helpImprove = 1) } }
+                    Chip("No thanks", s.helpImprove == 2) { AppState.update { it.copy(helpImprove = 2) } }
+                    Chip("Send a report", false) { OutputChain.share(context, OutputChain.report(context)) }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
             Box(Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(C.Amber).clickable { notes = null }, contentAlignment = Alignment.Center) {
                 Text("Got it", style = body(15.sp, FontWeight.Bold, C.OnAccent))
             }

@@ -128,6 +128,11 @@ object AutoResume {
 /** What changed in each version, shown once after an update and in Credits. */
 object Changelog {
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.9" to listOf(
+            "Settings in sections (Look, Playback, Sound & output, Lyrics & covers, Library, Lock screen & notification, About), with search",
+            "Help improve: optional anonymous reports so problems on your phone can be fixed without asking you",
+            "Generate playlists: quick picks (Discover, Favourites, Hi-Res mix, Fresh, Throwback, More like this artist) or your own rules",
+        ),
         "0.8" to listOf(
             "What's new screen after every update",
             "ReplayGain: songs or albums at the same loudness (Settings)",

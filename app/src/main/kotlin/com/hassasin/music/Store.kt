@@ -49,6 +49,8 @@ data class AppSettings(
     val keepPitch: Boolean = true,
     /** Start again when headphones reconnect after being unplugged. */
     val autoResume: Boolean = true,
+    /** Anonymous reports: 0 = not asked yet, 1 = allowed, 2 = declined. */
+    val helpImprove: Int = 0,
     /** Convert songs to the phone's mixer rate in the app (high-quality sinc) instead of Android's resampler. */
     val appResampler: Boolean = false,
     /** App volume step 0..30 (2 dB each, 30 = 0 dB). */

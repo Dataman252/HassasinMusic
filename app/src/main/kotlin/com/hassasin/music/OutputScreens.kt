@@ -367,113 +367,194 @@ private fun FixArtList(nav: Nav, lib: LibraryData) {
     }
 }
 
+/** One settings page and what it holds, for the section list and the search. */
+private data class SettingsSection(val key: String, val title: String, val about: String, val icon: String, val words: List<String>)
+
+private val SECTIONS = listOf(
+    SettingsSection("look", "Look", "Theme, visualizer, seek bar, cover", I.Image, listOf("Look", "Glow", "Soft", "Flow", "Theme", "Visualizer", "Seek bar", "Cover on song change", "Cover animation", "Cover sharpness")),
+    SettingsSection("playback", "Playback", "Crossfade, ReplayGain, headphones", I.Play, listOf("Crossfade", "ReplayGain", "Loudness", "Resume with headphones", "Shortest song", "Gapless")),
+    SettingsSection("sound", "Sound & output", "Output, DVC, resampler, EQ", I.Eq, listOf("Output", "USB DAC", "Bit-perfect", "Direct Volume Control", "DVC", "Volume", "App resampler", "Resampling", "Equalizer", "Effects", "Output chain", "Battery")),
+    SettingsSection("lyrics", "Lyrics & covers", "Online look-ups, Hinglish, album pictures", I.Lyrics, listOf("Lyrics online", "Hinglish", "Album art online", "Covers from Apple", "Album pictures", "Fix covers", "Wi-Fi only")),
+    SettingsSection("library", "Library", "Folders, playlists, reading the library", I.Library, listOf("Music folders", "Hidden folders", "Read the library again", "Refresh", "Playlists")),
+    SettingsSection("lock", "Lock screen & notification", "Lock screen player, notification card, widget", I.Clock, listOf("Lock screen player", "Notification player", "Second line", "Live lyrics", "Notification buttons", "Widget")),
+    SettingsSection("about", "About", "Updates, what's new, help improve, credits", I.Star, listOf("Updates", "What's new", "Changelog", "Help improve", "Diagnostics", "Report", "Share the app", "Support the developer", "Credits")),
+)
+
 @Composable
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun SettingsScreen(nav: Nav) {
-    val s by AppState.settings.collectAsState()
-    val scope = rememberCoroutineScope()
-    var scanning by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
     Backdrop(Color(0xFF1B1F4A)) {
         LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { Box(Modifier.padding(start = 0.dp)) { Header("Settings", { nav.back() }) } }
+            item { Header("Settings", { nav.back() }) }
             item {
-                Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Look", style = body(14.sp, FontWeight.Bold))
-                    Segmented(listOf("Glow", "Soft", "Flow"), when (s.theme) { "soft" -> 1; "flow" -> 2; else -> 0 }) { i -> AppState.update { it.copy(theme = listOf("glow", "soft", "flow")[i]) } }
-                    Text("Glow takes its light from each cover. Soft is matte and calm, with an indigo accent. Flow fills the screen with the cover and tints everything in its colour.", style = body(12.sp, color = C.TextMid))
-                    Spacer(Modifier.height(6.dp))
-                    Text("Visualizer", style = body(14.sp, FontWeight.Bold))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("off" to "Off", "wave" to "Wave", "bars" to "Bars", "mirror" to "Mirror").forEach { (k, label) -> Chip(label, s.vizStyle == k) { AppState.update { it.copy(vizStyle = k) } } }
+                Row(Modifier.fillMaxWidth().height(48.dp).recessed().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Ico(I.Search, C.TextMid, 18.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (query.isEmpty()) Text("Search settings", style = body(14.sp, color = C.TextMid))
+                        androidx.compose.foundation.text.BasicTextField(query, { query = it }, singleLine = true, textStyle = body(14.sp), cursorBrush = SolidColor(C.Amber), modifier = Modifier.fillMaxWidth())
                     }
-                    Spacer(Modifier.height(6.dp))
-                    Text("Seek bar", style = body(14.sp, FontWeight.Bold))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SeekStyles.ALL.forEach { (key, label) -> Chip(label, s.seekStyle == key) { AppState.update { it.copy(seekStyle = key) } } }
-                    }
-                    Text("Sits behind the play controls; tap or drag anywhere on it to move through the song.", style = body(12.sp, color = C.TextMid))
-                    Spacer(Modifier.height(6.dp))
-                    Text("Cover on song change", style = body(14.sp, FontWeight.Bold))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("slide" to "Slide", "fade" to "Fade", "zoom" to "Zoom", "flip" to "Flip").forEach { (k, label) -> Chip(label, s.coverAnim == k) { AppState.update { it.copy(coverAnim = k) } } }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text("Crossfade between songs", style = body(14.sp, FontWeight.Bold))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(0, 2, 4, 6, 8, 12).forEach { sec -> Chip(if (sec == 0) "Off" else "$sec s", s.crossfadeSec == sec) { AppState.update { it.copy(crossfadeSec = sec) } } }
-                    }
-                    Text("The end of a song fades out and the next fades in. Songs from one album play straight on. Not applied in bit-perfect USB mode.", style = body(12.sp, color = C.TextMid))
-                    Spacer(Modifier.height(6.dp))
-                    CoverSharpness(s.artSharpness)
+                    if (query.isNotEmpty()) Text("Clear", style = body(13.sp, FontWeight.Bold, C.Amber), modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { query = "" }.padding(6.dp))
                 }
             }
-            item {
-                val ctx = androidx.compose.ui.platform.LocalContext.current
-                SettingRow(
-                    "Direct Volume Control (DVC)",
-                    if (s.dvc) "The app sets the volume in 64-bit; Android's media volume stays at maximum. Volume keys: ${Dvc.label()}"
-                    else "Let the app control the volume in 64-bit instead of Android (cleaner, more EQ headroom)",
-                ) { Toggle(s.dvc, "Direct Volume Control") { v -> Dvc.enable(ctx, v) } }
-            }
-            item { LockScreenRow(s.lockScreen) }
-            item {
-                Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("ReplayGain", style = body(14.sp, FontWeight.Bold))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("off" to "Off", "track" to "Per song", "album" to "Per album").forEach { (k, label) -> Chip(label, s.replayGain == k) { AppState.update { it.copy(replayGain = k) } } }
+            if (query.isBlank()) {
+                SECTIONS.forEach { sec ->
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().raised().clip(RoundedCornerShape(16.dp)).clickable { nav.go(Route.SettingsPage(sec.key)) }.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(C.Amber.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) { Ico(sec.icon, C.AmberText, 20.dp) }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(sec.title, style = body(15.sp, FontWeight.Bold))
+                                Text(sec.about, style = body(12.sp, color = C.TextMid))
+                            }
+                            Text("›", style = body(22.sp, color = C.TextLow))
+                        }
                     }
-                    if (s.replayGain != "off") Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Pre-amp ${"%+.0f".format(s.replayGainPreampDb)} dB", style = body(13.sp), modifier = Modifier.weight(1f))
-                        RoundButton(I.Minus, "Pre-amp down", { AppState.update { it.copy(replayGainPreampDb = (it.replayGainPreampDb - 1).coerceAtLeast(-15.0)) } }, 36.dp)
-                        Spacer(Modifier.width(8.dp))
-                        RoundButton(I.Plus, "Pre-amp up", { AppState.update { it.copy(replayGainPreampDb = (it.replayGainPreampDb + 1).coerceAtMost(6.0)) } }, 36.dp)
+                }
+            } else {
+                val q = query.trim().lowercase()
+                val hits = SECTIONS.flatMap { sec -> sec.words.filter { it.lowercase().contains(q) }.map { it to sec } }
+                if (hits.isEmpty()) item { Text("Nothing matches “$query”.", style = body(13.sp, color = C.TextMid)) }
+                hits.forEach { (word, sec) ->
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().raised().clip(RoundedCornerShape(14.dp)).clickable { nav.go(Route.SettingsPage(sec.key)) }.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(word, style = body(14.sp, FontWeight.Bold))
+                                Text("In ${sec.title}", style = body(12.sp, color = C.TextMid))
+                            }
+                            Text("›", style = body(20.sp, color = C.TextLow))
+                        }
                     }
-                    Text("Plays songs (or whole albums) at the same loudness, from the ReplayGain values in their tags. Only turns down, never past a song's peak.", style = body(12.sp, color = C.TextMid))
                 }
             }
-            item { SettingRow("Resume with headphones", "Start again when headphones or Bluetooth reconnect within 30 minutes of being unplugged") { Toggle(s.autoResume, "Resume with headphones") { v -> AppState.update { it.copy(autoResume = v) } } } }
-            item {
-                SettingRow("App resampler", if (s.appResampler) "Songs are converted to the phone's ${AudioPathInfo.mixerRate(androidx.compose.ui.platform.LocalContext.current) / 1000} kHz in the app (48-tap sinc, 64-bit), so Android does not resample" else "Use the app's high-quality converter instead of Android's when a song's rate differs from the phone's") {
-                    Toggle(s.appResampler, "App resampler") { v -> AppState.update { it.copy(appResampler = v) }; Playback.rebuildAudio("app resampler") }
-                }
-            }
-            item {
-                Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Notification player", style = body(14.sp, FontWeight.Bold))
-                    Text("Second line", style = body(12.sp, FontWeight.Bold, C.TextMid))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("quality" to "Artist · quality", "lyrics" to "Live lyrics", "artist" to "Artist only").forEach { (k, label) -> Chip(label, s.notifLine == k) { AppState.update { it.copy(notifLine = k) } } }
+            item { Text("Hassasin Music ${BuildConfig.VERSION_NAME}", style = mono(11.sp, color = C.TextLow), modifier = Modifier.padding(top = 6.dp, start = 4.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun ChoiceRow(title: String, options: List<Pair<String, String>>, selected: String, about: String? = null, pick: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, style = body(14.sp, FontWeight.Bold))
+        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (k, label) -> Chip(label, selected == k) { pick(k) } }
+        }
+        about?.let { Text(it, style = body(12.sp, color = C.TextMid)) }
+    }
+}
+
+/** One section of Settings. */
+@Composable
+fun SettingsPageScreen(nav: Nav, key: String) {
+    val s by AppState.settings.collectAsState()
+    val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var scanning by remember { mutableStateOf(false) }
+    val sec = SECTIONS.firstOrNull { it.key == key } ?: SECTIONS.first()
+    Backdrop(Color(0xFF1B1F4A)) {
+        LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { Header(sec.title, { nav.back() }) }
+            when (key) {
+                "look" -> {
+                    item {
+                        Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("Look", style = body(14.sp, FontWeight.Bold))
+                            Segmented(listOf("Glow", "Soft", "Flow"), when (s.theme) { "soft" -> 1; "flow" -> 2; else -> 0 }) { i -> AppState.update { it.copy(theme = listOf("glow", "soft", "flow")[i]) } }
+                            Text("Glow takes its light from each cover. Soft is matte and calm, with an indigo accent. Flow fills the screen with the cover and tints everything in its colour.", style = body(12.sp, color = C.TextMid))
+                        }
                     }
-                    Text("Buttons", style = body(12.sp, FontWeight.Bold, C.TextMid))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        NotifButtons.CHOICES.forEach { (k, label) -> Chip(label, s.notifButtons == k) { AppState.update { it.copy(notifButtons = k) } } }
+                    item { ChoiceRow("Visualizer", listOf("off" to "Off", "wave" to "Wave", "bars" to "Bars", "mirror" to "Mirror"), s.vizStyle) { k -> AppState.update { it.copy(vizStyle = k) } } }
+                    item { ChoiceRow("Seek bar", SeekStyles.ALL, s.seekStyle, "Sits behind the play controls; tap or drag anywhere on it to move through the song.") { k -> AppState.update { it.copy(seekStyle = k) } } }
+                    item { ChoiceRow("Cover on song change", listOf("slide" to "Slide", "fade" to "Fade", "zoom" to "Zoom", "flip" to "Flip"), s.coverAnim) { k -> AppState.update { it.copy(coverAnim = k) } } }
+                    item { Column(Modifier.fillMaxWidth().raised().padding(14.dp)) { CoverSharpness(s.artSharpness) } }
+                }
+                "playback" -> {
+                    item {
+                        ChoiceRow("Crossfade between songs", listOf(0, 2, 4, 6, 8, 12).map { it.toString() to (if (it == 0) "Off" else "$it s") }, s.crossfadeSec.toString(),
+                            "The end of a song fades out and the next fades in. Songs from one album play straight on. Not applied in bit-perfect USB mode.") { k -> AppState.update { it.copy(crossfadeSec = k.toInt()) } }
                     }
-                    Text("Your phone draws this card itself; the app fills it in. Songs without a picture get a cover made for them.", style = body(12.sp, color = C.TextMid))
+                    item {
+                        Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("ReplayGain", style = body(14.sp, FontWeight.Bold))
+                            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("off" to "Off", "track" to "Per song", "album" to "Per album").forEach { (k, label) -> Chip(label, s.replayGain == k) { AppState.update { it.copy(replayGain = k) } } }
+                            }
+                            if (s.replayGain != "off") Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Pre-amp ${"%+.0f".format(s.replayGainPreampDb)} dB", style = body(13.sp), modifier = Modifier.weight(1f))
+                                RoundButton(I.Minus, "Pre-amp down", { AppState.update { it.copy(replayGainPreampDb = (it.replayGainPreampDb - 1).coerceAtLeast(-15.0)) } }, 36.dp)
+                                Spacer(Modifier.width(8.dp))
+                                RoundButton(I.Plus, "Pre-amp up", { AppState.update { it.copy(replayGainPreampDb = (it.replayGainPreampDb + 1).coerceAtMost(6.0)) } }, 36.dp)
+                            }
+                            Text("Plays songs (or whole albums) at the same loudness, from the ReplayGain values in their tags. Only turns down, never past a song's peak.", style = body(12.sp, color = C.TextMid))
+                        }
+                    }
+                    item { SettingRow("Resume with headphones", "Start again when headphones or Bluetooth reconnect within 30 minutes of being unplugged") { Toggle(s.autoResume, "Resume with headphones") { v -> AppState.update { it.copy(autoResume = v) } } } }
+                    item {
+                        SettingRow("Shortest song", "Leave out files under ${s.minDurationSec} s (voice notes, ringtones)") {
+                            RoundButton(I.Minus, "Shorter", { AppState.update { it.copy(minDurationSec = (it.minDurationSec - 15).coerceAtLeast(0)) } }, 40.dp)
+                            Spacer(Modifier.width(8.dp))
+                            RoundButton(I.Plus, "Longer", { AppState.update { it.copy(minDurationSec = (it.minDurationSec + 15).coerceAtMost(300)) } }, 40.dp)
+                        }
+                    }
+                    item { Text("Speed, pitch and the sleep timer are in the player's ⋯ menu.", style = body(12.sp, color = C.TextLow), modifier = Modifier.padding(horizontal = 4.dp)) }
+                }
+                "sound" -> {
+                    item { SettingRow("Output", "How the sound leaves the phone, and the output chain") { RoundButton(I.Plug, "Output", { nav.go(Route.Sound(5)) }, 40.dp) } }
+                    item { SettingRow("Equalizer & effects", "EQ, bass and tone, tuning, effects, earphone correction") { RoundButton(I.Eq, "Equalizer and effects", { nav.go(Route.Sound(0)) }, 40.dp) } }
+                    item {
+                        SettingRow(
+                            "Direct Volume Control (DVC)",
+                            if (s.dvc) "The app sets the volume in 64-bit; Android's media volume stays at maximum. Volume keys: ${Dvc.label()}"
+                            else "Let the app control the volume in 64-bit instead of Android (cleaner, more EQ headroom)",
+                        ) { Toggle(s.dvc, "Direct Volume Control") { v -> Dvc.enable(ctx, v) } }
+                    }
+                    item {
+                        SettingRow("App resampler", if (s.appResampler) "Songs are converted to the phone's ${AudioPathInfo.mixerRate(ctx) / 1000} kHz in the app (48-tap sinc, 64-bit), so Android does not resample" else "Use the app's high-quality converter instead of Android's when a song's rate differs from the phone's") {
+                            Toggle(s.appResampler, "App resampler") { v -> AppState.update { it.copy(appResampler = v) }; Playback.rebuildAudio("app resampler") }
+                        }
+                    }
+                }
+                "lyrics" -> {
+                    item { SettingRow("Find lyrics online", "From LRCLIB, when the file has none") { Toggle(s.autoLyrics, "Find lyrics online") { on -> AppState.update { it.copy(autoLyrics = on) } } } }
+                    item { SettingRow("Hinglish", "Show lyrics in Indian scripts and Urdu in Roman letters") { Toggle(s.lyricsHinglish, "Hinglish") { on -> AppState.update { it.copy(lyricsHinglish = on) } } } }
+                    item { SettingRow("Find album art online", "Missing pictures from MusicBrainz, sure matches only") { Toggle(s.autoArt, "Find album art online") { on -> AppState.update { it.copy(autoArt = on) }; if (on) AppState.findMissingArt() } } }
+                    item { SettingRow("Covers from Apple's catalogue", "Best for Indian releases. Apple's terms allow its artwork for promoting its store; fine for personal use") { Toggle(s.artFromApple, "Covers from Apple's catalogue") { on -> AppState.update { it.copy(artFromApple = on) } } } }
+                    item { SettingRow("Album pictures", "See and fix covers that are missing or wrong") { RoundButton(I.Image, "Album pictures", { nav.go(Route.FixArt()) }, 40.dp) } }
+                    item { SettingRow("Online on Wi-Fi only", "No art or lyrics look-ups on mobile data") { Toggle(s.onlineOnWifiOnly, "Online on Wi-Fi only") { on -> AppState.update { it.copy(onlineOnWifiOnly = on) } } } }
+                }
+                "library" -> {
+                    item { SettingRow("Music folders", if (s.musicFolders.isEmpty()) "Playing from every folder" else "Playing from ${s.musicFolders.size} chosen folder${if (s.musicFolders.size == 1) "" else "s"}") { RoundButton(I.Folder, "Music folders", { nav.go(Route.Folders) }, 40.dp) } }
+                    item { SettingRow("Hidden folders", s.hiddenFolders.joinToString(", ")) {} }
+                    item {
+                        SettingRow("Read the library again", if (scanning) "Reading…" else "After adding or deleting music") {
+                            RoundButton(I.Reset, "Read the library again", { scanning = true; scope.launch { AppState.rescan(ctx); scanning = false } }, 40.dp)
+                        }
+                    }
+                    item { SettingRow("Playlists", "Make, import and export playlists") { RoundButton(I.Playlist, "Playlists", { nav.go(Route.Playlists) }, 40.dp) } }
+                }
+                "lock" -> {
+                    item { LockScreenRow(s.lockScreen) }
+                    item { ChoiceRow("Notification: second line", listOf("quality" to "Artist · quality", "lyrics" to "Live lyrics", "artist" to "Artist only"), s.notifLine) { k -> AppState.update { it.copy(notifLine = k) } } }
+                    item { ChoiceRow("Notification: buttons", NotifButtons.CHOICES, s.notifButtons, "Your phone draws this card itself; the app fills it in. Songs without a picture get a cover made for them.") { k -> AppState.update { it.copy(notifButtons = k) } } }
+                    item { Text("Widget: long-press your home screen, choose Widgets and find Hassasin Music.", style = body(12.sp, color = C.TextMid), modifier = Modifier.padding(horizontal = 4.dp)) }
+                }
+                else -> {
+                    item { UpdateRow() }
+                    item { HelpImproveRow() }
+                    item { SettingRow("What's new", "Changes in every version") { RoundButton(I.Star, "What's new", { nav.go(Route.Credits) }, 40.dp) } }
+                    item { SettingRow("Share the app", "Send friends the download link") { RoundButton(I.Share, "Share the app", { ShareApp.share(ctx) }, 40.dp) } }
+                    item { SettingRow("Support the developer", "A coffee by UPI keeps new versions coming") { RoundButton(I.Star, "Support the developer", { Donate.showing = true }, 40.dp) } }
+                    item { SettingRow("Credits", "Hassasin Music ${BuildConfig.VERSION_NAME} · who and what made it") { RoundButton(I.Star, "Credits", { nav.go(Route.Credits) }, 40.dp) } }
                 }
             }
-            item { SettingRow("Music folders", if (s.musicFolders.isEmpty()) "Playing from every folder" else "Playing from ${s.musicFolders.size} chosen folder${if (s.musicFolders.size == 1) "" else "s"}") { RoundButton(I.Folder, "Music folders", { nav.go(Route.Folders) }, 40.dp) } }
-            item { SettingRow("Album pictures", "See and fix covers that are missing or wrong") { RoundButton(I.Image, "Album pictures", { nav.go(Route.FixArt()) }, 40.dp) } }
-            item { SettingRow("Find album art online", "Missing pictures from MusicBrainz, sure matches only") { Toggle(s.autoArt, "Find album art online") { on -> AppState.update { it.copy(autoArt = on) }; if (on) AppState.findMissingArt() } } }
-            item { SettingRow("Covers from Apple's catalogue", "Best for Indian releases. Apple's terms allow its artwork for promoting its store; fine for personal use") { Toggle(s.artFromApple, "Covers from Apple's catalogue") { on -> AppState.update { it.copy(artFromApple = on) } } } }
-            item { SettingRow("Find lyrics online", "From LRCLIB, when the file has none") { Toggle(s.autoLyrics, "Find lyrics online") { on -> AppState.update { it.copy(autoLyrics = on) } } } }
-            item { SettingRow("Online on Wi-Fi only", "No art or lyrics look-ups on mobile data") { Toggle(s.onlineOnWifiOnly, "Online on Wi-Fi only") { on -> AppState.update { it.copy(onlineOnWifiOnly = on) } } } }
-            item {
-                SettingRow("Shortest song", "Leave out files under ${s.minDurationSec} s (voice notes, ringtones)") {
-                    RoundButton(I.Minus, "Shorter", { AppState.update { it.copy(minDurationSec = (it.minDurationSec - 15).coerceAtLeast(0)) } }, 40.dp)
-                    Spacer(Modifier.width(8.dp))
-                    RoundButton(I.Plus, "Longer", { AppState.update { it.copy(minDurationSec = (it.minDurationSec + 15).coerceAtMost(300)) } }, 40.dp)
-                }
-            }
-            item { SettingRow("Hidden folders", s.hiddenFolders.joinToString(", ")) {} }
-            item {
-                SettingRow("Read the library again", if (scanning) "Reading…" else "After adding or deleting music") {
-                    RoundButton(I.Reset, "Read the library again", { scanning = true; scope.launch { AppState.scan(); scanning = false } }, 40.dp)
-                }
-            }
-            item { UpdateRow() }
-            item { SettingRow("Support the developer", "A coffee by UPI keeps new versions coming") { RoundButton(I.Star, "Support the developer", { Donate.showing = true }, 40.dp) } }
-            item { val ctx = androidx.compose.ui.platform.LocalContext.current; SettingRow("Share the app", "Send friends the download link") { RoundButton(I.Share, "Share the app", { ShareApp.share(ctx) }, 40.dp) } }
-            item { SettingRow("Credits","Hassasin Music ${BuildConfig.VERSION_NAME} · who and what made it") { RoundButton(I.Star, "Credits", { nav.go(Route.Credits) }, 40.dp) } }
         }
     }
 }

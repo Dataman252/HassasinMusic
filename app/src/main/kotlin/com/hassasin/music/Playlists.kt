@@ -126,7 +126,8 @@ fun PlaylistsList(nav: Nav, header: Boolean = false) {
         if (header) item { Header("Playlists", { nav.back() }) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip("+ New playlist", false) { naming = true }
+                Chip("✨ Generate", false) { nav.go(Route.GeneratePlaylist) }
+                Chip("+ New", false) { naming = true }
                 Chip("Import M3U", false) { import.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/vnd.apple.mpegurl", "application/x-mpegurl", "text/plain", "*/*")) }
             }
         }

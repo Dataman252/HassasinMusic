@@ -47,6 +47,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         Playback.init(this)
+        Reports.installCrashHandler(this)
         LockScreen.register(this)
         AutoResume.register(this)
         val open = PendingIntent.getActivity(

@@ -142,6 +142,7 @@ object Playback {
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) { publish() }
             override fun onRepeatModeChanged(repeatMode: Int) { publish() }
             override fun onPlayerError(error: PlaybackException) {
+                Reports.onPlayerError(appContext, error)
                 Log.w(TAG, "player error", error)
                 // The phone's decoder failed: decode this format with FFmpeg and try the same song again.
                 val mime = (error as? androidx.media3.exoplayer.ExoPlaybackException)?.rendererFormat?.sampleMimeType
@@ -180,6 +181,7 @@ object Playback {
         player.repeatMode = when (s.repeat) { 1 -> Player.REPEAT_MODE_ALL; 2 -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF }
         // Four times a second with the screen on; once a second with it off (battery).
         scope.launch { while (true) { tick(); SleepTimer.tick(); delay(if (Power.screenOn) 250 else 1000) } }
+        scope.launch { while (true) { delay(1000); if (player.isPlaying) Reports.onPlaybackSecond(appContext) } }
         // Speed/pitch and ReplayGain follow their settings.
         scope.launch {
             AppState.settings.map { Triple(it.speed, it.keepPitch, it.replayGain to it.replayGainPreampDb) }.distinctUntilChanged().collect {
