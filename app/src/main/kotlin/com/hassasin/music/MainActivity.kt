@@ -283,6 +283,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     SheetHost(nav)
+                    SongSheetHost(nav)
                     WhatsNew(nav)
                     AddToPlaylistDialog()
                     SetupNudge(nav)

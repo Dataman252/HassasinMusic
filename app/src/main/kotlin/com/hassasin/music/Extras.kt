@@ -130,6 +130,7 @@ object Changelog {
     /** True while the What's new card is on screen. */
     @Volatile var showing = false
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.10.1" to listOf("A tidy ⋯ menu: the song, rating, eight shortcuts, speed and sleep timer in one sheet", "Audiophile is first in Settings, and stands out"),
         "0.10" to listOf(
             "A tour of the player for first-time users (Settings → About → Take the tour)",
             "Best sound setup: tell it what you listen with, and the app sets itself up for the cleanest sound on your phone",

@@ -251,62 +251,11 @@ private fun SongName(nav: Nav, t: Track, album: Album?, rating: Int, st: PlaySta
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun MoreMenu(nav: Nav, t: Track?, album: Album?, s: AppSettings, rating: Int = 0) {
-    var open by remember { mutableStateOf(false) }
+    // The ⋯ button opens the song sheet (SongSheet.kt).
     Box(Modifier.tourTarget("more")) {
-        GlassCircle(I.More, "More") { open = true }
-        DropdownMenu(open, { open = false }, containerColor = if (Look.soft) Color(0xFF2B2D32) else Color(0xFF171925)) {
-            fun item(label: String, go: () -> Unit) = @Composable { DropdownMenuItem(text = { Text(label, style = body(14.sp)) }, onClick = { open = false; go() }) }
-            if (t != null) {
-                Text("RATE", style = eyebrow(), modifier = Modifier.padding(start = 16.dp, top = 6.dp))
-                Row(Modifier.padding(horizontal = 8.dp)) {
-                    (1..5).forEach { n ->
-                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { AppState.rate(t, if (rating == n) 0 else n) }.semantics { contentDescription = "$n stars" }, contentAlignment = Alignment.Center) {
-                            Ico(I.Star, if (n <= rating) C.Amber else C.TextMid, 22.dp, filled = n <= rating)
-                        }
-                    }
-                }
-                androidx.compose.material3.HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-                item("Go to album") { nav.go(Route.AlbumDetail(t.albumKey)) }()
-                if (t.artist.isNotBlank()) item("Go to artist") { LyricsRepo.mainArtist(t.artist).let { a -> nav.go(Route.Tracks(a, "artist", a)) } }()
-                item("Change the picture") { nav.go(Route.FixArt(album?.key ?: t.albumKey)) }()
-            }
-            androidx.compose.material3.HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-            // Speed (Android output; the direct outputs always play at 1×) and the sleep timer.
-            Text("SPEED", style = eyebrow(), modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp))
-            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 12.dp).width(280.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Speed.CHOICES.forEach { sp ->
-                    Chip(if (sp == 1f) "1×" else "${sp}×", kotlin.math.abs(s.speed - sp) < 0.01f) { AppState.update { it.copy(speed = sp) } }
-                }
-            }
-            DropdownMenuItem(
-                text = { Text(if (s.keepPitch) "Pitch stays the same" else "Pitch follows speed", style = body(14.sp)) },
-                trailingIcon = { if (s.keepPitch) Ico(I.Check, C.Amber, 18.dp) },
-                onClick = { AppState.update { it.copy(keepPitch = !it.keepPitch) } },
-            )
-            Text("SLEEP TIMER · ${SleepTimer.label()}", style = eyebrow(), modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp))
-            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 12.dp).width(280.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(15, 30, 45, 60, 90).forEach { m -> Chip("$m min", false) { SleepTimer.set(m); open = false } }
-                Chip("End of song", SleepTimer.endOfSong) { SleepTimer.setEndOfSong(); open = false }
-                if (SleepTimer.active()) Chip("Cancel", false) { SleepTimer.cancel(); open = false }
-            }
-            androidx.compose.material3.HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-            if (t != null) item("Edit tags") { nav.go(Route.EditTags(t.id)) }()
-            item("Playlists") { nav.go(Route.Playlists) }()
-            Text("LOOK", style = eyebrow(), modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp))
-            listOf("glow" to "Glow", "soft" to "Soft", "flow" to "Flow").forEach { (key, label) ->
-                DropdownMenuItem(
-                    text = { Text(label, style = body(14.sp, if (s.theme == key) FontWeight.Bold else FontWeight.Normal, if (s.theme == key) C.AmberText else C.TextHi)) },
-                    trailingIcon = { if (s.theme == key) Ico(I.Check, C.Amber, 18.dp) },
-                    onClick = { open = false; AppState.update { it.copy(theme = key) } },
-                )
-            }
-            androidx.compose.material3.HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-            item("Settings") { nav.go(Route.Settings) }()
-            item("Credits") { nav.go(Route.Credits) }()
-            val ctx = androidx.compose.ui.platform.LocalContext.current
-            item("Share the app") { ShareApp.share(ctx) }()
-        }
+        GlassCircle(I.More, "More") { if (t != null) SongSheet.track = t else nav.go(Route.Settings) }
     }
+    @Suppress("UNUSED_EXPRESSION") album; @Suppress("UNUSED_EXPRESSION") s; @Suppress("UNUSED_EXPRESSION") rating
 }
 
 /** Lyrics · Sound · Queue: one bar, each part showing its current state, each opening a sheet. */

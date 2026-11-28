@@ -371,10 +371,10 @@ private fun FixArtList(nav: Nav, lib: LibraryData) {
 private data class SettingsSection(val key: String, val title: String, val about: String, val icon: String, val words: List<String>)
 
 private val SECTIONS = listOf(
+    SettingsSection("audio", "Audiophile", "Purity check, pure mode, resampler filter, dither, test tones", I.HiRes, listOf("Audiophile", "Bit-perfect", "Purity", "Pure mode", "Best sound setup", "Setup", "Resampler filter", "Minimum phase", "Dither", "Bit depth", "Headroom", "Limiter", "Test tones", "Left and right", "Polarity", "Frequency sweep", "Noise floor")),
     SettingsSection("look", "Look", "Theme, visualizer, seek bar, cover", I.Image, listOf("Look", "Glow", "Soft", "Flow", "Theme", "Visualizer", "Seek bar", "Cover on song change", "Cover animation", "Cover sharpness")),
     SettingsSection("playback", "Playback", "Crossfade, ReplayGain, headphones", I.Play, listOf("Crossfade", "ReplayGain", "Loudness", "Resume with headphones", "Shortest song", "Gapless")),
     SettingsSection("sound", "Sound & output", "Output, DVC, resampler, EQ", I.Eq, listOf("Output", "USB DAC", "Bit-perfect", "Direct Volume Control", "DVC", "Volume", "App resampler", "Resampling", "Equalizer", "Effects", "Output chain", "Battery")),
-    SettingsSection("audio", "Audiophile", "Purity check, pure mode, resampler filter, dither, test tones", I.Plug, listOf("Audiophile", "Bit-perfect", "Purity", "Pure mode", "Best sound setup", "Setup", "Resampler filter", "Minimum phase", "Dither", "Bit depth", "Headroom", "Limiter", "Test tones", "Left and right", "Polarity", "Frequency sweep", "Noise floor")),
     SettingsSection("lyrics", "Lyrics & covers", "Online look-ups, Hinglish, album pictures", I.Lyrics, listOf("Lyrics online", "Hinglish", "Album art online", "Covers from Apple", "Album pictures", "Fix covers", "Wi-Fi only")),
     SettingsSection("library", "Library", "Folders, playlists, reading the library", I.Library, listOf("Music folders", "Hidden folders", "Read the library again", "Refresh", "Playlists")),
     SettingsSection("lock", "Lock screen & notification", "Lock screen player, notification card, widget", I.Clock, listOf("Lock screen player", "Notification player", "Second line", "Live lyrics", "Notification buttons", "Widget")),
@@ -401,17 +401,23 @@ fun SettingsScreen(nav: Nav) {
             if (query.isBlank()) {
                 SECTIONS.forEach { sec ->
                     item {
+                        // Audiophile stands out: the place for the best sound, first and lit in the accent.
+                        val star = sec.key == "audio"
+                        val shape = RoundedCornerShape(if (star) 20.dp else 16.dp)
                         Row(
-                            Modifier.fillMaxWidth().raised().clip(RoundedCornerShape(16.dp)).clickable { nav.go(Route.SettingsPage(sec.key)) }.padding(14.dp),
+                            Modifier.fillMaxWidth().then(if (star) Modifier.amberSelected(shape) else Modifier.raised()).clip(shape).clickable { nav.go(Route.SettingsPage(sec.key)) }.padding(if (star) 18.dp else 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(C.Amber.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) { Ico(sec.icon, C.AmberText, 20.dp) }
+                            Box(Modifier.size(if (star) 46.dp else 38.dp).clip(RoundedCornerShape(12.dp)).background(if (star) C.Amber else C.Amber.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                                Ico(sec.icon, if (star) C.OnAccent else C.AmberText, if (star) 24.dp else 20.dp)
+                            }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(sec.title, style = body(15.sp, FontWeight.Bold))
-                                Text(sec.about, style = body(12.sp, color = C.TextMid))
+                                if (star) Text("FOR THE BEST SOUND", style = mono(10.sp, FontWeight.Bold, C.AmberText))
+                                Text(sec.title, style = if (star) display(19.sp) else body(15.sp, FontWeight.Bold))
+                                Text(sec.about, style = body(12.sp, color = if (star) C.TextHi.copy(alpha = 0.8f) else C.TextMid))
                             }
-                            Text("›", style = body(22.sp, color = C.TextLow))
+                            Text("›", style = body(22.sp, color = if (star) C.AmberText else C.TextLow))
                         }
                     }
                 }
