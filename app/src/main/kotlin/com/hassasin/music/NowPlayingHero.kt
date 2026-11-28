@@ -248,6 +248,7 @@ fun SignalPill(st: PlayState, s: AppSettings, compact: Boolean = false, onClick:
     val t = st.current ?: return
     val effects = Eq.anyEffect(s.sound, st.usb)
     val (dot, label) = when {
+        DsdPlayback.converted(st) -> C.Amber to "DSD → PCM"
         st.usb && st.untouched -> C.Ok to "Bit-perfect"
         st.usb -> C.Amber to "32-bit DSP"
         else -> Color.White.copy(alpha = 0.5f) to if (effects) "Android · DSP" else "Android"
@@ -277,6 +278,7 @@ private fun CompactSignal(st: PlayState, s: AppSettings, onClick: () -> Unit) {
     val path by AudioPathInfo.path.collectAsState()
     val effects = Eq.anyEffect(s.sound, st.usb) && !(s.output == "offload" && !st.usb)
     val label = when {
+        DsdPlayback.converted(st) -> "DSD → PCM"
         st.usb -> if (st.untouched) "Bit-perfect" else "USB DAC + effects"
         st.phoneDirect -> if (st.untouched) "Direct · untouched" else if (effects) "Direct + effects" else "Direct"
         s.output == "usb_android" && AndroidBitPerfect.active.isNotEmpty() -> "Bit-perfect (Android)"
@@ -284,7 +286,7 @@ private fun CompactSignal(st: PlayState, s: AppSettings, onClick: () -> Unit) {
         s.output == "hires" && !effects -> "Hi-Res"
         else -> if (effects) "Phone + effects" else "Phone"
     }
-    val dot = when { (st.usb || st.phoneDirect) && st.untouched -> C.Ok; s.output == "usb_android" && AndroidBitPerfect.active.isNotEmpty() -> C.Ok; effects -> C.Amber; else -> Color.White.copy(alpha = 0.55f) }
+    val dot = when { DsdPlayback.converted(st) -> C.Amber; (st.usb || st.phoneDirect) && st.untouched -> C.Ok; s.output == "usb_android" && AndroidBitPerfect.active.isNotEmpty() -> C.Ok; effects -> C.Amber; else -> Color.White.copy(alpha = 0.55f) }
     val dest = if (st.usb) "${st.dacName.ifBlank { "DAC" }.split(' ').last()} ${khz(st.dacRate)}k" else remember(path.updatedAt, st.current?.id) { AudioPathInfo.deviceShort(context) }
     val shape = RoundedCornerShape(999.dp)
     Row(

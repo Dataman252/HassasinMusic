@@ -33,6 +33,7 @@ object NotifLine {
     fun output(st: PlayState, s: AppSettings): String {
         val effects = Eq.anyEffect(s.sound, st.usb) && !(s.output == "offload" && !st.usb)
         return when {
+            DsdPlayback.converted(st) -> "DSD → PCM"
             st.usb -> if (st.untouched) "Bit-perfect" else "USB DAC + effects"
             st.phoneDirect -> if (st.untouched) "Direct" else "Direct + effects"
             s.output == "usb_android" && AndroidBitPerfect.active.isNotEmpty() -> "Bit-perfect"

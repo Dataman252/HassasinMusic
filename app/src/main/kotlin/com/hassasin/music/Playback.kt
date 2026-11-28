@@ -121,7 +121,12 @@ object Playback {
     fun init(context: Context) {
         if (::player.isInitialized) return
         appContext = context.applicationContext
+        // .dff and .dsf are read by the app's own DSD reader; everything else by Media3's.
+        val extractors = androidx.media3.extractor.ExtractorsFactory {
+            arrayOf<androidx.media3.extractor.Extractor>(DsdExtractor()) + androidx.media3.extractor.DefaultExtractorsFactory().createExtractors()
+        }
         player = ExoPlayer.Builder(appContext, MusicRenderersFactory(appContext))
+            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(appContext, extractors))
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)

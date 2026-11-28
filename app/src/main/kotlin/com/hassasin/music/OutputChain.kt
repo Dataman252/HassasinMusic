@@ -64,6 +64,7 @@ object OutputChain {
         val flacChip = FlacOffloadSink.active
         val (dec, decLong) = AudioPathInfo.decoderLine(p, st.usb)
         out += when {
+            t.bits == 1 -> ChainStep("Decoder", DsdPlayback.describe(), if (DsdPlayback.dopRate > 0) ChainStep.UNTOUCHED else ChainStep.CHANGED)
             flacChip.isNotEmpty() -> ChainStep("Decoder", "Phone's audio chip decodes the FLAC itself (offload)", ChainStep.UNTOUCHED)
             else -> ChainStep("Decoder", "$dec · $decLong", if (dec == "…") ChainStep.NEUTRAL else ChainStep.UNTOUCHED)
         }

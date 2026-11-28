@@ -83,6 +83,8 @@ data class AppSettings(
     val outDepth: String = "auto",
     /** Pure mode: what was on before it, so turning it off brings it all back. Null = pure mode off. */
     val pureBackup: PureBackup? = null,
+    /** DSD files: "dop" (native DSD to a USB DAC that takes it, PCM otherwise) or "pcm" (always converted). */
+    val dsdMode: String = "dop",
 )
 
 /** Settings put aside while Pure mode is on. */

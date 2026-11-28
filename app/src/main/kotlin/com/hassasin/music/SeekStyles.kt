@@ -164,7 +164,7 @@ data class QualityInfo(
         get() = listOfNotNull(
             codec,
             bits.takeIf { it > 0 }?.let { "$it-bit" },
-            sampleRate.takeIf { it > 0 }?.let { "${khz(it)} kHz" },
+            sampleRate.takeIf { it > 0 }?.let { if (it > 1_000_000) "%.1f MHz".format(Locale.US, it / 1e6) else "${khz(it)} kHz" },
             kbps.takeIf { it > 0 }?.let { "%,d kbps".format(Locale.US, it) },
         ).joinToString(" · ")
 }
@@ -184,6 +184,12 @@ object Quality {
     /** Reads the file's own format (cached). Bit depth comes from the header for FLAC/WAV. */
     fun of(t: Track): QualityInfo = cache.getOrPut(t.id) {
         var mime = t.mime; var rate = t.sampleRate; var ch = 2; var br = t.bitrate
+        if (t.bits == 1) {
+            val d = DsdFile.read(t.path)
+            val size = File(t.path).length().takeIf { it > 0 } ?: t.sizeBytes
+            return@getOrPut QualityInfo(d?.label ?: "DSD", "Direct Stream Digital", true, d?.rate ?: rate, 1, d?.channels ?: 2,
+                if (t.durationMs > 0) (size * 8 / t.durationMs).toInt() else 0, size / 1048576.0, t.ext)
+        }
         runCatching {
             val ex = MediaExtractor()
             try {

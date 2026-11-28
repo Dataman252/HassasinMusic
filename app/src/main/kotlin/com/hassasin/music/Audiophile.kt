@@ -85,6 +85,7 @@ fun purityOf(context: Context, st: PlayState, s: AppSettings): Purity {
     val effects = Eq.anyEffect(s.sound, st.usb)
     return when {
         effects -> Purity(2, "Processed", "EQ or effects are shaping the sound: ${dsp?.detail ?: ""}")
+        DsdPlayback.converted(st) -> Purity(1, "Clean", DsdPlayback.describe())
         dsp?.state != ChainStep.CHANGED && out?.state == ChainStep.UNTOUCHED -> Purity(0, "Bit-perfect", "Every sample reaches the output exactly as it is in the file")
         else -> Purity(1, "Clean", listOfNotNull(dsp?.takeIf { it.state == ChainStep.CHANGED }?.detail, out?.takeIf { it.state != ChainStep.UNTOUCHED }?.detail).joinToString("; ").ifBlank { "Converted on the way, nothing added" })
     }
@@ -448,6 +449,11 @@ fun LazyListScope.audiophileItems(nav: Nav, s: AppSettings, ctx: Context) {
         ChoiceRow("ReplayGain", listOf("off" to "Off", "track" to "Per song", "album" to "Per album"), s.replayGain,
             "Evens out loudness by turning loud songs down (64-bit). Per album keeps the album's own dynamics. Off is bit-perfect.") { k -> AppState.update { it.copy(replayGain = k) } }
     }
+    item {
+        ChoiceRow("DSD files", listOf("dop" to "Native to USB DAC (DoP)", "pcm" to "Always convert to PCM"), s.dsdMode,
+            if (s.dsdMode == "dop") "With the Untouched USB output and EQ off, DSD goes to your DAC as DoP: the DSD bits arrive untouched and the DAC's DSD light comes on. Otherwise, or if the DAC refuses the rate, the app converts it to 24-bit PCM."
+            else "DSD is converted by the app to 24-bit PCM (88.2 kHz for DSD64, 176.4 kHz above), so EQ and effects work on it.") { k -> AppState.update { it.copy(dsdMode = k) }; DsdPlayback.refused.clear(); Playback.rebuildAudio("dsd mode") }
+    }
     if (s.speed != 1f) item {
         SettingRow("Speed is ${s.speed}×", "Changing speed re-processes every sample") { Chip("Back to 1×", false) { AppState.update { it.copy(speed = 1f) }; Speed.apply() } }
     }
@@ -521,7 +527,7 @@ fun LazyListScope.audiophileItems(nav: Nav, s: AppSettings, ctx: Context) {
             listOf(
                 "Bit-perfect through the phone's own jack, unless the phone allows Direct output (Direct appears under Output when it does)",
                 "Choosing the Bluetooth codec from an app: that is in Developer options",
-                "Native DSD and MQA unfolding",
+                "Native DSD through the phone's jack or Bluetooth (it is converted to PCM there), and MQA unfolding",
             ).forEach { Text("• $it", style = body(12.sp, color = C.TextMid)) }
         }
     }

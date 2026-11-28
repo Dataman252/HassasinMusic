@@ -111,6 +111,12 @@ class UsbAudioSink(
         androidFormat = inputFormat.takeIf { it.sampleMimeType == MimeTypes.AUDIO_RAW }
         val s = settings()
         val wantKind = when { dacReady() -> "usb"; s.phoneDirect -> "phone"; else -> "" }
+        dopMuted = false
+        peakSent = 0
+        val isDop = DsdPlayback.dopRate > 0 && inputFormat.sampleRate == DsdPlayback.dopRate
+        // DoP is never handed to Android (its rate is beyond Android's output, and it would be noise): it is dropped
+        // while the song restarts as PCM.
+        if (isDop && wantKind != "usb") { refuseDop(inputFormat.sampleRate); useFallback(); return }
         if (wantKind.isEmpty() || usbSupport(inputFormat) == AudioSink.SINK_FORMAT_UNSUPPORTED) {
             useFallback()
             fallbackConfigure(inputFormat, specifiedBufferSize, outputChannels)
@@ -145,6 +151,7 @@ class UsbAudioSink(
                 it.switchMode = 1  // silence only: the DAC's mute makes a "ting", volume glides distort
                 it.queueMs = 30  // the most the vivo's USB controller takes; covers its screen-off hiccups
                 it.setVolumeDb(minOf(s.volumeDb, s.maxDb))
+                DacRates.known = it.supportedRates()
             }
         } else PhoneDirectSession.open()
         if (current == null) {
@@ -158,6 +165,9 @@ class UsbAudioSink(
             val until = SystemClock.elapsedRealtime() + 1500
             while (current.isRunning() && current.ringFrames() > 0 && SystemClock.elapsedRealtime() < until) SystemClock.sleep(5)
             if (!current.startAt(out.sampleRate)) {
+                if (isDop) { refuseDop(out.sampleRate); useFallback(); return }
+                // A DSD song converted for a rate this DAC lacks: convert it again for one it lists.
+                if (DsdPlayback.pcmRate == out.sampleRate && !DacRates.allows(out.sampleRate)) { useFallback(); dopMuted = true; Playback.rebuildAudioLater("DSD rate for this DAC"); return }
                 Log.w(TAG, "${current.outName} refused ${out.sampleRate} Hz; using Android's output")
                 useFallback()
                 fallbackConfigure(inputFormat, specifiedBufferSize, outputChannels)
@@ -248,6 +258,8 @@ class UsbAudioSink(
                 }
                 else -> buf.int
             }
+            val av = if (v == Int.MIN_VALUE) Int.MAX_VALUE else kotlin.math.abs(v)
+            if (av > peakSent) peakSent = av
             pending[o] = v.toByte(); pending[o + 1] = (v shr 8).toByte(); pending[o + 2] = (v shr 16).toByte(); pending[o + 3] = (v shr 24).toByte()
             o += 4
         }
@@ -269,6 +281,8 @@ class UsbAudioSink(
     }
 
     private var vizBuf = FloatArray(0)
+    /** Loudest sample sent to the DAC since the last health line (diagnostics: tells silence from sound). */
+    private var peakSent = 0
 
     /** Sends what is waiting; true when nothing is left. */
     private fun drainPending(): Boolean {
@@ -322,7 +336,18 @@ class UsbAudioSink(
         Viz.push(vizScratch, frames, f.sampleRate, 250)
     }
 
+    /** DoP the DAC would not take: dropped (it would be noise anywhere else) while the song restarts as PCM. */
+    private var dopMuted = false
+
+    private fun refuseDop(rate: Int) {
+        Log.w(TAG, "DoP at $rate Hz not possible here: converting DSD to PCM instead")
+        DsdPlayback.refused += rate
+        dopMuted = true
+        Playback.rebuildAudioLater("DoP refused")
+    }
+
     override fun handleBuffer(buffer: ByteBuffer, presentationTimeUs: Long, encodedAccessUnitCount: Int): Boolean {
+        if (dopMuted) { buffer.position(buffer.limit()); return true }
         if (!usb) { peekForViz(buffer, presentationTimeUs); return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount) }
         if (!drainPending()) return false
         if (startMediaUs == C.TIME_UNSET) startMediaUs = presentationTimeUs
@@ -330,7 +355,8 @@ class UsbAudioSink(
         if (now - lastStatsAt > 10000) {
             lastStatsAt = now
             session?.let { s ->
-                Log.i(TAG, "health: gaps ${s.underruns()}, longest pause ${s.maxGapUs() / 1000.0} ms, buffered ${s.ringFrames() * 1000 / rate.coerceAtLeast(1)} ms")
+                Log.i(TAG, "health: gaps ${s.underruns()}, longest pause ${s.maxGapUs() / 1000.0} ms, buffered ${s.ringFrames() * 1000 / rate.coerceAtLeast(1)} ms, peak ${if (peakSent == 0) "silence" else "%.1f dBFS".format(20 * kotlin.math.log10(peakSent / 2147483648.0))}")
+                peakSent = 0
             }
         }
         val p = pipeline

@@ -130,6 +130,13 @@ object Changelog {
     /** True while the What's new card is on screen. */
     @Volatile var showing = false
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.11" to listOf(
+            "DSD: .dff and .dsf files now appear in the library and play",
+            "DSD is converted to 24-bit PCM by the app (88.2 kHz for DSD64, 176.4 kHz for DSD128/256), or sent natively to a USB DAC as DoP",
+            "Audiophile → DSD files: native (DoP) or always PCM",
+            "DSD tags and embedded covers are read by the app (Android cannot)",
+            "USB DACs: the app only asks for rates the DAC lists (fixes silence on DACs that accept a rate they cannot play)",
+        ),
         "0.10.1" to listOf("A tidy ⋯ menu: the song, rating, eight shortcuts, speed and sleep timer in one sheet", "Audiophile is first in Settings, and stands out"),
         "0.10" to listOf(
             "A tour of the player for first-time users (Settings → About → Take the tour)",

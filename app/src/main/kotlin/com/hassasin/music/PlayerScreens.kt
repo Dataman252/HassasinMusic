@@ -790,7 +790,7 @@ fun QualityLine(t: Track) {
             val parts = listOfNotNull(
                 info.codec,
                 info.bits.takeIf { it > 0 }?.let { "$it-bit" },
-                info.sampleRate.takeIf { it > 0 }?.let { "${khz(it)} kHz" },
+                info.sampleRate.takeIf { it > 0 }?.let { if (it > 1_000_000) "%.1f MHz".format(java.util.Locale.US, it / 1e6) else "${khz(it)} kHz" },
                 info.kbps.takeIf { it > 0 }?.let { "%,d kbps".format(java.util.Locale.US, it) },
             )
             parts.forEachIndexed { i, part ->

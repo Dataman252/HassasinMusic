@@ -197,6 +197,17 @@ class UsbDacSession private constructor(
         return (back[0].toInt() and 0xFF) or ((back[1].toInt() and 0xFF) shl 8) or ((back[2].toInt() and 0xFF) shl 16) or ((back[3].toInt() and 0xFF) shl 24)
     }
 
+    /** Rates the DAC lists for its clock (UAC2 RANGE request); empty when it does not say. */
+    fun supportedRates(): List<IntRange> = runCatching {
+        val index = (layout.clockId shl 8) or layout.controlInterface
+        val buf = ByteArray(2 + 12 * 32)
+        val n = conn.controlTransfer(0xA1, 0x02, 0x0100, index, buf, buf.size, 1000)
+        if (n < 14) return@runCatching emptyList()
+        fun u32(i: Int) = (buf[i].toInt() and 0xFF) or ((buf[i + 1].toInt() and 0xFF) shl 8) or ((buf[i + 2].toInt() and 0xFF) shl 16) or ((buf[i + 3].toInt() and 0xFF) shl 24)
+        val count = (buf[0].toInt() and 0xFF) or ((buf[1].toInt() and 0xFF) shl 8)
+        (0 until count).filter { 2 + it * 12 + 12 <= n }.map { val o = 2 + it * 12; u32(o)..u32(o + 4) }
+    }.getOrDefault(emptyList())
+
     /** The DAC's current clock rate, or -1. */
     private fun readClock(): Int {
         val back = ByteArray(4)
@@ -324,6 +335,9 @@ class UsbDacSession private constructor(
     }
 
     fun start(hz: Int, bits: Int = 0): Boolean {
+        // Never ask for a rate the DAC does not list: some go silent until re-plugged after a refused rate.
+        val listed = supportedRates().also { if (it.isNotEmpty()) DacRates.known = it }
+        if (listed.isNotEmpty() && listed.none { hz in it }) { Log.w(TAG, "DAC lists ${listed.joinToString { "${it.first}-${it.last}" }}; not trying $hz Hz"); return false }
         // Hide the switch, so neither the cut nor the DAC re-locking to a new clock is heard.
         hide()
         stopStream()

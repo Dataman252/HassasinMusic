@@ -119,7 +119,7 @@ object ArtRepo {
             }
         }
         for (t in album.tracks.take(3)) {
-            val bytes = runCatching {
+            val bytes = (if (t.bits == 1) DsdTagReader.read(t.path, withPicture = true)?.picture else null) ?: runCatching {
                 MediaMetadataRetriever().run { try { setDataSource(t.path); embeddedPicture } finally { release() } }
             }.getOrNull() ?: continue
             val full = decode(bytes) ?: continue

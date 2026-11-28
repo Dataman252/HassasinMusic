@@ -39,7 +39,8 @@ data class Track(
     val formatLabel: String
         get() = buildString {
             append(ext.ifBlank { mime.substringAfter('/').uppercase(Locale.ROOT) })
-            if (bits > 0 && sampleRate > 0) append(" ${bits}/${khz(sampleRate)}")
+            if (bits == 1 && sampleRate > 0) append(" DSD${sampleRate / 44100}")
+            else if (bits > 0 && sampleRate > 0) append(" ${bits}/${khz(sampleRate)}")
             else if (bitrate > 0) append(" ${bitrate / 1000} kbps")
         }
 }
@@ -78,7 +79,8 @@ object Library {
         var infoChanged = false
         context.contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cols.toTypedArray(),
-            "${MediaStore.Audio.Media.DURATION} >= ?", arrayOf(minMs.toString()), null,
+            // DSD files: Android cannot read them, so their duration is 0 there; the app reads the header itself.
+            "(${MediaStore.Audio.Media.DURATION} >= ? OR ${MediaStore.Audio.Media.DATA} LIKE '%.dff' OR ${MediaStore.Audio.Media.DATA} LIKE '%.dsf')", arrayOf(minMs.toString()), null,
         )?.use { c ->
             fun str(name: String) = c.getColumnIndex(name).let { if (it >= 0) c.getString(it) ?: "" else "" }
             fun int(name: String) = c.getColumnIndex(name).let { if (it >= 0) c.getInt(it) else 0 }
@@ -91,9 +93,32 @@ object Library {
                 val size = long(MediaStore.Audio.Media.SIZE)
                 val infoKey = "$path|$size"
                 val fmt = info[infoKey] ?: readFormat(path).also { info[infoKey] = it; infoChanged = true }
+                val isDsd = fmt.getOrElse(1) { 0 } == 1
+                val duration = long(MediaStore.Audio.Media.DURATION).takeIf { it > 0 } ?: fmt.getOrElse(2) { 0 }.toLong()
+                if (duration < minMs) continue
                 val rawTrack = int(MediaStore.Audio.Media.TRACK)
                 val artist = str(MediaStore.Audio.Media.ARTIST).let { if (it == "<unknown>") "" else it }
-                out += Track(
+                val dsdTags = if (isDsd) DsdTagReader.read(path) else null
+                out += if (dsdTags != null) Track(
+                    id = id,
+                    uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
+                    path = path,
+                    title = dsdTags.title.ifBlank { File(path).nameWithoutExtension },
+                    artist = dsdTags.artist.ifBlank { dsdTags.albumArtist },
+                    album = dsdTags.album,
+                    albumArtist = dsdTags.albumArtist,
+                    genre = dsdTags.genre,
+                    durationMs = duration,
+                    trackNo = dsdTags.track,
+                    discNo = dsdTags.disc.coerceAtLeast(1),
+                    year = dsdTags.year,
+                    mime = "audio/dsd",
+                    sizeBytes = size,
+                    dateAdded = long(MediaStore.Audio.Media.DATE_ADDED),
+                    bitrate = 0,
+                    sampleRate = fmt.getOrElse(0) { 0 },
+                    bits = 1,
+                ) else Track(
                     id = id,
                     uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
                     path = path,
@@ -103,12 +128,12 @@ object Library {
                     album = str(MediaStore.Audio.Media.ALBUM).let { a -> if (a.equals(File(path).parentFile?.name ?: "", ignoreCase = true)) "" else a },
                     albumArtist = str(MediaStore.Audio.Media.ALBUM_ARTIST),
                     genre = str(MediaStore.Audio.Media.GENRE),
-                    durationMs = long(MediaStore.Audio.Media.DURATION),
+                    durationMs = duration,
                     // Older Android packs the disc into the thousands of the track number.
                     trackNo = rawTrack % 1000,
                     discNo = int(MediaStore.Audio.Media.DISC_NUMBER).takeIf { it > 0 } ?: (rawTrack / 1000).coerceAtLeast(1),
                     year = int(MediaStore.Audio.Media.YEAR),
-                    mime = str(MediaStore.Audio.Media.MIME_TYPE),
+                    mime = if (isDsd) "audio/dsd" else str(MediaStore.Audio.Media.MIME_TYPE),
                     sizeBytes = size,
                     dateAdded = long(MediaStore.Audio.Media.DATE_ADDED),
                     bitrate = int(MediaStore.Audio.Media.BITRATE),
@@ -144,6 +169,8 @@ object Library {
                         listOf(rate, u16(22))
                     }
                 }
+                // DSD: [DSD rate, 1 bit, duration in ms].
+                tag == "FRM8" || tag == "DSD " -> DsdFile.read(path)?.let { listOf(it.rate, 1, (it.durationUs / 1000).toInt()) } ?: listOf(0, 0)
                 tag.startsWith("ID3") || (head[0].toInt() and 0xFF) == 0xFF -> listOf(0, 0)
                 else -> listOf(0, 0)
             }
