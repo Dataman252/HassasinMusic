@@ -371,7 +371,7 @@ private fun FixArtList(nav: Nav, lib: LibraryData) {
 private data class SettingsSection(val key: String, val title: String, val about: String, val icon: String, val words: List<String>)
 
 private val SECTIONS = listOf(
-    SettingsSection("audio", "Audiophile", "Purity check, pure mode, resampler filter, dither, test tones", I.HiRes, listOf("Audiophile", "Bit-perfect", "Purity", "Pure mode", "Best sound setup", "Setup", "Resampler filter", "Minimum phase", "Dither", "Bit depth", "Headroom", "Limiter", "Test tones", "Left and right", "Polarity", "Frequency sweep", "Noise floor")),
+    SettingsSection("audio", "Audiophile", "Purity check, pure mode, resampler filter, dither, test tones", I.HiRes, listOf("Audiophile", "Bit-perfect", "Purity", "Pure mode", "Test my setup", "Best sound setup", "Setup", "DAC test", "Upsampling", "Rates", "Resampler filter", "Minimum phase", "Dither", "Bit depth", "Headroom", "Limiter", "Test tones", "Left and right", "Polarity", "Frequency sweep", "Noise floor")),
     SettingsSection("look", "Look", "Theme, visualizer, seek bar, cover", I.Image, listOf("Look", "Glow", "Soft", "Flow", "Theme", "Visualizer", "Seek bar", "Cover on song change", "Cover animation", "Cover sharpness")),
     SettingsSection("playback", "Playback", "Crossfade, ReplayGain, headphones", I.Play, listOf("Crossfade", "ReplayGain", "Loudness", "Resume with headphones", "Shortest song", "Gapless")),
     SettingsSection("sound", "Sound & output", "Output, DVC, resampler, EQ", I.Eq, listOf("Output", "USB DAC", "Bit-perfect", "Direct Volume Control", "DVC", "Volume", "App resampler", "Resampling", "Equalizer", "Effects", "Output chain", "Battery")),
@@ -514,7 +514,7 @@ fun SettingsPageScreen(nav: Nav, key: String) {
                     item { Text("Speed, pitch and the sleep timer are in the player's ⋯ menu.", style = body(12.sp, color = C.TextLow), modifier = Modifier.padding(horizontal = 4.dp)) }
                 }
                 "sound" -> {
-                    item { SettingRow("Best sound setup", "Answer one question; the app sets itself up for the cleanest sound on this phone") { RoundButton(I.Plug, "Best sound setup", { nav.go(Route.QualitySetup) }, 40.dp) } }
+                    item { SettingRow("Test my setup", "Tests the DAC, earphones, Bluetooth or speaker in use and sets the app up for it") { RoundButton(I.Plug, "Test my setup", { nav.go(Route.QualitySetup) }, 40.dp) } }
                     item { SettingRow("Audiophile", "Every quality control in one place, with a purity check and test tones") { RoundButton(I.Eq, "Audiophile", { nav.go(Route.SettingsPage("audio")) }, 40.dp) } }
                     item { SettingRow("Output", "How the sound leaves the phone, and the output chain") { RoundButton(I.Plug, "Output", { nav.go(Route.Sound(5)) }, 40.dp) } }
                     item { SettingRow("Equalizer & effects", "EQ, bass and tone, tuning, effects, earphone correction") { RoundButton(I.Eq, "Equalizer and effects", { nav.go(Route.Sound(0)) }, 40.dp) } }
@@ -560,7 +560,7 @@ fun SettingsPageScreen(nav: Nav, key: String) {
                     item { UpdateRow() }
                     item { HelpImproveRow() }
                     item { SettingRow("Take the tour", "A 30-second walk around the player") { RoundButton(I.Play, "Take the tour", { nav.tab(Route.Player); Tour.start() }, 40.dp) } }
-                    item { SettingRow("Best sound setup", "Set the app up for your headphones, DAC or speaker") { RoundButton(I.Plug, "Best sound setup", { nav.go(Route.QualitySetup) }, 40.dp) } }
+                    item { SettingRow("Test my setup", "Test what is connected and set the app up for it") { RoundButton(I.Plug, "Test my setup", { nav.go(Route.QualitySetup) }, 40.dp) } }
                     item { SettingRow("What's new", "Changes in every version") { RoundButton(I.Star, "What's new", { nav.go(Route.Credits) }, 40.dp) } }
                     item { SettingRow("Share the app", "Send friends the download link") { RoundButton(I.Share, "Share the app", { ShareApp.share(ctx) }, 40.dp) } }
                     item { SettingRow("Support the developer", "A coffee by UPI keeps new versions coming") { RoundButton(I.Star, "Support the developer", { Donate.showing = true }, 40.dp) } }

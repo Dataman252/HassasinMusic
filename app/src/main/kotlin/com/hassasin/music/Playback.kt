@@ -83,7 +83,7 @@ private class MusicRenderersFactory(context: Context) : DefaultRenderersFactory(
         return FlacOffloadSink(UsbAudioSink(context, android, SoundEngine(forUsb = true)) {
             val s = AppState.settings.value
             // During a call the DAC belongs to Android, so the call uses your earphones and the DAC's microphone.
-            UsbOutputSettings(enabled = s.output == "usb" && !Playback.callActive, phoneDirect = s.output == "direct" && !Playback.callActive, volumeDb = s.dacVolumeDb, maxDb = s.dacMaxDb)
+            UsbOutputSettings(enabled = s.output == "usb" && !Playback.callActive && !Playback.labHold, phoneDirect = s.output == "direct" && !Playback.callActive, volumeDb = s.dacVolumeDb, maxDb = s.dacMaxDb)
         })
     }
 }
@@ -107,6 +107,8 @@ object Playback {
     /** True while the phone rings or a call (or voice/video call app) is active. */
     @Volatile var callActive = false
         private set
+    /** The device test (Test my setup) has the DAC: the player leaves it alone meanwhile. */
+    @Volatile var labHold = false
     private var normalSince = 0L
 
     private val _state = MutableStateFlow(PlayState())
@@ -341,7 +343,7 @@ object Playback {
         val usbm = appContext.getSystemService(Context.USB_SERVICE) as UsbManager
         val dac = UsbDacProbe.findDac(usbm)
         val allowed = dac != null && usbm.hasPermission(dac)
-        val wantUsb = s.output == "usb" && allowed && !callActive
+        val wantUsb = s.output == "usb" && allowed && !callActive && !labHold
         val ready = player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING
         if (!ready) return
         when {

@@ -16,8 +16,8 @@ android {
         applicationId = "com.hassasin.music"
         minSdk = 28
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.11"
+        versionCode = 19
+        versionName = "0.12"
         ndk { abiFilters += setOf("arm64-v8a", "armeabi-v7a") }
     }
 

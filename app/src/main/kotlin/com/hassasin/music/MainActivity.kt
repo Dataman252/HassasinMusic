@@ -270,7 +270,7 @@ class MainActivity : ComponentActivity() {
                                     is Route.SettingsPage -> SettingsPageScreen(nav, r.key)
                                     is Route.PlaylistDetail -> PlaylistScreen(nav, r.id)
                                     is Route.EditTags -> TagEditorScreen(nav, r.trackId)
-                                    Route.QualitySetup -> QualitySetupScreen(nav)
+                                    Route.QualitySetup -> QualityLabScreen(nav)
                                     else -> LibraryHub(nav)
                                 }
                             }
@@ -287,6 +287,7 @@ class MainActivity : ComponentActivity() {
                     WhatsNew(nav)
                     AddToPlaylistDialog()
                     SetupNudge(nav)
+                    TunedBanner(nav)
                     TourOverlay(nav)
                     VolumeHud(volumeShownAt)
                     DonatePrompt()
@@ -424,7 +425,7 @@ private fun WhatsNew(nav: Nav) {
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                 Chip("Take the tour", false) { notes = null; nav.tab(Route.Player); Tour.start() }
-                Chip("Best sound setup", false) { notes = null; nav.go(Route.QualitySetup) }
+                Chip("Test my setup", false) { notes = null; nav.go(Route.QualitySetup) }
             }
             Box(Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(C.Amber).clickable { notes = null }, contentAlignment = Alignment.Center) {
                 Text("Got it", style = body(15.sp, FontWeight.Bold, C.OnAccent))

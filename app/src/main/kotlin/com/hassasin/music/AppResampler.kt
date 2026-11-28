@@ -23,7 +23,13 @@ import kotlin.math.sqrt
  * When it makes 16-bit it dithers: flat TPDF, noise-shaped TPDF, or none.
  */
 @OptIn(UnstableApi::class)
-class AppResampler(context: Context, private val floatSink: Boolean, private val engine: SoundEngine) : BaseAudioProcessor() {
+class AppResampler(
+    context: Context,
+    private val floatSink: Boolean,
+    private val engine: SoundEngine,
+    /** USB output: the rate to send a song at (its own when the DAC takes it). Null = Android's output (to the mixer rate). */
+    private val usbTarget: ((Int) -> Int)? = null,
+) : BaseAudioProcessor() {
     private val mixerRate = (context.getSystemService(Context.AUDIO_SERVICE) as AudioManager)
         .getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 48000
 
@@ -99,17 +105,19 @@ class AppResampler(context: Context, private val floatSink: Boolean, private val
     private var rand = 4242L
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
-        if (!AppState.settings.value.appResampler || AppState.settings.value.output == "offload") return AudioProcessor.AudioFormat.NOT_SET
+        val usb = usbTarget != null
+        if (!usb && (!AppState.settings.value.appResampler || AppState.settings.value.output == "offload")) return AudioProcessor.AudioFormat.NOT_SET
         val enc = inputAudioFormat.encoding
         if (enc !in setOf(C.ENCODING_PCM_16BIT, C.ENCODING_PCM_24BIT, C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT) || inputAudioFormat.channelCount !in 1..2) return AudioProcessor.AudioFormat.NOT_SET
-        if (inputAudioFormat.sampleRate == mixerRate) return AudioProcessor.AudioFormat.NOT_SET
+        val target = usbTarget?.invoke(inputAudioFormat.sampleRate) ?: mixerRate
+        if (target <= 0 || inputAudioFormat.sampleRate == target) return AudioProcessor.AudioFormat.NOT_SET
         ch = inputAudioFormat.channelCount
         inRate = inputAudioFormat.sampleRate
-        outRate = mixerRate
+        outRate = target
         step = inRate.toDouble() / outRate
         // The 16-bit sink takes only 16-bit, unless the effects engine (which takes float) comes next.
         val s = AppState.settings.value
-        floatOut = (floatSink && s.outDepth != "16") || engine.wantsActive()
+        floatOut = usb || (floatSink && s.outDepth != "16") || engine.wantsActive()
         dither = s.dither
         val filter = s.resamplerFilter
         HALF = design(filter).first

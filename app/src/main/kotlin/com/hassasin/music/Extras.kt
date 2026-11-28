@@ -130,6 +130,12 @@ object Changelog {
     /** True while the What's new card is on screen. */
     @Volatile var showing = false
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.12" to listOf(
+            "Test my setup: the app tests the connected DAC, earphones, Bluetooth or speaker and finds its limits (rates, bit depth, native DSD, stability)",
+            "It then sets itself up for that device, and remembers your own changes per device",
+            "Your library on that device: every kind of file, and whether it arrives untouched or converted",
+            "USB DACs: songs at a rate the DAC lacks are converted by the app to its nearest rate, instead of going through Android (optional: upsample everything)",
+        ),
         "0.11" to listOf(
             "DSD: .dff and .dsf files now appear in the library and play",
             "DSD is converted to 24-bit PCM by the app (88.2 kHz for DSD64, 176.4 kHz for DSD128/256), or sent natively to a USB DAC as DoP",

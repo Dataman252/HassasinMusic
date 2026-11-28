@@ -85,6 +85,10 @@ data class AppSettings(
     val pureBackup: PureBackup? = null,
     /** DSD files: "dop" (native DSD to a USB DAC that takes it, PCM otherwise) or "pcm" (always converted). */
     val dsdMode: String = "dop",
+    /** Test each output device once when it connects and set the app up for it (Test my setup). */
+    val autoTune: Boolean = true,
+    /** USB DAC, songs at a rate it lacks: "auto" (app converts to its nearest rate), "max" (everything to its highest), "off" (Android). */
+    val usbResample: String = "auto",
 )
 
 /** Settings put aside while Pure mode is on. */

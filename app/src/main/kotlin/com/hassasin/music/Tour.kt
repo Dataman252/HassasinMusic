@@ -78,7 +78,7 @@ object Tour {
         TourStep("lyrics", "Lyrics", "Synced lyrics, also in Hinglish. Tap a line to jump there, or sync a song yourself."),
         TourStep("sound", "Sound", "Equalizer, earphone correction and effects."),
         TourStep("more", "More", "Rate the song, speed, sleep timer, tags, playlists and Settings."),
-        TourStep(null, "The best sound for your setup", "Answer one question and the app sets itself up for the cleanest sound this phone can give."),
+        TourStep(null, "The best sound for your setup", "The app tests what is connected (DAC, earphones, Bluetooth or speaker), finds its limits and sets itself up for the cleanest sound it can give."),
     )
 
     /** The tour or the setup ran in this session: no coffee card on top of a first look around. */

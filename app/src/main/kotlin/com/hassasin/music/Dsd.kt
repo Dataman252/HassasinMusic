@@ -219,6 +219,8 @@ object DsdTagReader {
 object DacRates {
     @Volatile var known: List<IntRange> = emptyList()
     fun allows(hz: Int) = known.isEmpty() || known.any { hz in it }
+    /** The music rates (44.1 kHz and up) the DAC lists. */
+    fun listed(): List<Int> = DeviceLab.STANDARD.filter { hz -> known.any { hz in it } }
 }
 
 /** What the DSD player is doing now, for the output chain and the USB output. */
@@ -233,8 +235,10 @@ object DsdPlayback {
     /** PCM rate for a DSD rate: 88.2 kHz for DSD64, 176.4 kHz above, lowered to what a USB DAC in use lists. */
     fun pcmRateFor(dsdRate: Int): Int {
         val best = if (dsdRate >= 5_644_800) 176_400 else 88_200
-        val usb = AppState.settings.value.output == "usb" && Playback.state.value.dacPresent
-        return if (!usb) best else listOf(176_400, 88_200, 44_100).filter { it <= best }.firstOrNull { DacRates.allows(it) } ?: 44_100
+        val s = AppState.settings.value
+        val usb = s.output == "usb" && Playback.state.value.dacPresent
+        if (!usb || DacRates.known.isEmpty() || DacRates.allows(best) || s.usbResample != "off") return best
+        return listOf(176_400, 88_200, 44_100).filter { it <= best }.firstOrNull { DacRates.allows(it) } ?: 44_100
     }
 
     /** Plain rate for tests (no DAC). */

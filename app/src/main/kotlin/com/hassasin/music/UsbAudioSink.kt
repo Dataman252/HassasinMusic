@@ -65,6 +65,11 @@ class UsbAudioSink(
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
     init { UsbDacSession.context = context.applicationContext }
+
+    /** Converts songs at a rate the DAC lacks to the rate it will take (Audiophile → Rates the DAC lacks). */
+    private val usbResampler = AppResampler(context, true, engine) { inRate ->
+        DeviceLab.usbTargetFor(inRate, DacRates.listed(), AppState.settings.value.usbResample)
+    }
     private var usb = false
     private var session: DirectOut? = null
     private var pipeline: AudioProcessingPipeline? = null
@@ -127,6 +132,10 @@ class UsbAudioSink(
         if (outputChannels != null) processors += ChannelOrder(outputChannels)
         val mixedChannels = outputChannels?.size ?: input.channelCount
         if (mixedChannels != 2) processors += StereoDownmix()
+        if (wantKind == "usb") {
+            if (DacRates.known.isEmpty()) DeviceLab.ratesForAttachedDac(context).takeIf { it.isNotEmpty() }?.let { DacRates.known = it }
+            processors += usbResampler
+        }
         val effects = engine.wantsActive()
         if (effects) processors += engine
         val p = AudioProcessingPipeline(ImmutableList.copyOf(processors))
@@ -166,8 +175,10 @@ class UsbAudioSink(
             while (current.isRunning() && current.ringFrames() > 0 && SystemClock.elapsedRealtime() < until) SystemClock.sleep(5)
             if (!current.startAt(out.sampleRate)) {
                 if (isDop) { refuseDop(out.sampleRate); useFallback(); return }
-                // A DSD song converted for a rate this DAC lacks: convert it again for one it lists.
-                if (DsdPlayback.pcmRate == out.sampleRate && !DacRates.allows(out.sampleRate)) { useFallback(); dopMuted = true; Playback.rebuildAudioLater("DSD rate for this DAC"); return }
+                // The DAC's rates were not known yet (it was just opened): set the song up again for one it lists.
+                if (!DacRates.allows(out.sampleRate) && (DsdPlayback.pcmRate == out.sampleRate || AppState.settings.value.usbResample != "off") && !retriedForRates) {
+                    retriedForRates = true; useFallback(); dopMuted = true; Playback.rebuildAudioLater("DAC rates now known"); return
+                }
                 Log.w(TAG, "${current.outName} refused ${out.sampleRate} Hz; using Android's output")
                 useFallback()
                 fallbackConfigure(inputFormat, specifiedBufferSize, outputChannels)
@@ -176,6 +187,7 @@ class UsbAudioSink(
             framesWritten = 0
         }
         usb = true
+        retriedForRates = false
         UsbLive.session = current
         UsbLive.lost = false
         UsbLive.activatedAt = SystemClock.elapsedRealtime()
@@ -338,6 +350,8 @@ class UsbAudioSink(
 
     /** DoP the DAC would not take: dropped (it would be noise anywhere else) while the song restarts as PCM. */
     private var dopMuted = false
+    /** One retry when the DAC refused a rate before its list was known. */
+    private var retriedForRates = false
 
     private fun refuseDop(rate: Int) {
         Log.w(TAG, "DoP at $rate Hz not possible here: converting DSD to PCM instead")

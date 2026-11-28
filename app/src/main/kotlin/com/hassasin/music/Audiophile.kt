@@ -296,7 +296,7 @@ fun SetupNudge(nav: Nav) {
         if (!st.dacPresent) { dismissed = false; shown = false; return@LaunchedEffect }
         kotlinx.coroutines.delay(1500)
         val s = AppState.settings.value
-        shown = s.output != "usb" && s.output != "usb_android" && !Tour.active && !Changelog.showing
+        shown = !s.autoTune && s.output != "usb" && s.output != "usb_android" && !Tour.active && !Changelog.showing
     }
     if (!shown || dismissed) return
     Box(Modifier.fillMaxSize().navigationBarsPadding().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
@@ -438,7 +438,7 @@ fun LazyListScope.audiophileItems(nav: Nav, s: AppSettings, ctx: Context) {
             Toggle(Pure.isOn(s), "Pure mode") { Pure.set(it) }
         }
     }
-    item { SettingRow("Best sound setup", if (s.setupDone) "Set up for ${when (s.setupDevice) { "usb" -> "a USB DAC"; "wired" -> "wired earphones"; "bt" -> "Bluetooth"; else -> "the speaker" }}. Run it again after changing headphones" else "Answer one question; the app sets itself up for this phone") { RoundButton(I.Plug, "Best sound setup", { nav.go(Route.QualitySetup) }, 40.dp) } }
+    item { LabRow(nav) }
 
     item { Text("1 · SOURCE", style = eyebrow(), modifier = Modifier.padding(top = 8.dp, start = 4.dp)) }
     item {
@@ -506,6 +506,14 @@ fun LazyListScope.audiophileItems(nav: Nav, s: AppSettings, ctx: Context) {
     }
 
     item { Text("4 · OUTPUT", style = eyebrow(), modifier = Modifier.padding(top = 8.dp, start = 4.dp)) }
+    item {
+        ChoiceRow("USB DAC: rates it lacks", listOf("auto" to "Nearest rate it has", "max" to "Upsample to its highest", "off" to "Leave to Android"), s.usbResample,
+            when (s.usbResample) {
+                "max" -> "Every song is converted by the app to the DAC's highest rate (more CPU)."
+                "off" -> "Songs at a rate the DAC lacks go through Android, which converts them (often to 48 kHz)."
+                else -> "Songs at a rate the DAC lacks are converted by the app to its nearest higher rate, so nothing above the song is lost. Songs at rates it has stay bit-perfect."
+            }) { k -> AppState.update { it.copy(usbResample = k) }; Playback.rebuildAudio("usb rates") }
+    }
     item { SettingRow("Output: ${Outputs.of(s.output).title}", "How the sound leaves the phone: Phone, Hi-Res, Direct, USB DAC or Battery saver") { RoundButton(I.Plug, "Output", { nav.go(Route.Sound(5)) }, 40.dp) } }
     item {
         SettingRow("Direct Volume Control", if (s.dvc) "The app sets the volume in 64-bit; Android's stays at full. Now ${Dvc.label()}" else "Android sets the volume") {
@@ -531,4 +539,19 @@ fun LazyListScope.audiophileItems(nav: Nav, s: AppSettings, ctx: Context) {
             ).forEach { Text("• $it", style = body(12.sp, color = C.TextMid)) }
         }
     }
+}
+
+/** Audiophile's first row: the connected device and what the test found. */
+@Composable
+private fun LabRow(nav: Nav) {
+    val ctx = LocalContext.current
+    val profiles by DeviceLab.profiles.collectAsState()
+    val cur = remember(profiles) { DeviceLab.current(ctx) }
+    val p = profiles[cur.key]
+    val line = when {
+        p == null || p.testedAt == 0L -> "${cur.name}: not tested yet. The app tests it and sets itself up for it"
+        p.kind == "usb" && p.rates.isNotEmpty() -> "${cur.name}: ${khz(p.rates.min())}–${khz(p.rates.max())} kHz, ${p.bits.maxOrNull() ?: 0}-bit, ${if (p.dopDsd.isEmpty()) "no native DSD" else "DSD${p.dopDsd.max()} native"}"
+        else -> "${cur.name}: tested; ${if (p.limits.isEmpty()) "no limits found" else p.limits.first()}"
+    }
+    SettingRow("Test my setup", line) { RoundButton(I.Plug, "Test my setup", { nav.go(Route.QualitySetup) }, 40.dp) }
 }
