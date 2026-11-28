@@ -97,6 +97,7 @@ fun PlayerScreen(nav: Nav) {
     // While a cover is swiped (or glides to the next song) the colour moves with it, frame by frame.
     val glow = remember(glowAnim) { { CoverSwipe.colorAt() ?: glowAnim.value } }
     LaunchedEffect(glow) { androidx.compose.runtime.snapshotFlow { glow() }.collect { Look.tint = it } }
+    LaunchedEffect(t != null) { if (t != null && !AppState.settings.value.tourDone && !Tour.active) { kotlinx.coroutines.delay(900); if (!Changelog.showing) Tour.start() } }
     if (Look.flow && t != null) return FlowPlayer(nav, t, st, settings, stats[t.id]?.rating ?: 0, glow, glowTarget)
     Box(Modifier.fillMaxSize().playerSwipes(nav)) {
         ImmersiveBackground(art, glow)
@@ -241,8 +242,8 @@ private fun SongName(nav: Nav, t: Track, album: Album?, rating: Int, st: PlaySta
             MoreMenu(nav, t, album, settings, rating)
         }
         // The sound path, then the quality strip, centred under the name.
-        Box(Modifier.padding(top = 8.dp)) { SignalPill(st, settings, compact = true) { nav.go(Route.Sound(5)) } }
-        QualityLine(t)
+        Box(Modifier.padding(top = 8.dp).tourTarget("path")) { SignalPill(st, settings, compact = true) { nav.go(Route.Sound(5)) } }
+        Box(Modifier.tourTarget("quality")) { QualityLine(t) }
     }
 }
 
@@ -251,7 +252,7 @@ private fun SongName(nav: Nav, t: Track, album: Album?, rating: Int, st: PlaySta
 @Composable
 private fun MoreMenu(nav: Nav, t: Track?, album: Album?, s: AppSettings, rating: Int = 0) {
     var open by remember { mutableStateOf(false) }
-    Box {
+    Box(Modifier.tourTarget("more")) {
         GlassCircle(I.More, "More") { open = true }
         DropdownMenu(open, { open = false }, containerColor = if (Look.soft) Color(0xFF2B2D32) else Color(0xFF171925)) {
             fun item(label: String, go: () -> Unit) = @Composable { DropdownMenuItem(text = { Text(label, style = body(14.sp)) }, onClick = { open = false; go() }) }
@@ -333,7 +334,7 @@ private fun ToolBar(nav: Nav, s: AppSettings, st: PlayState) {
         ).forEach { (info, go) ->
             val (label, icon, value) = info
             Row(
-                Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(17.dp)).clickable(onClick = go).semantics { contentDescription = "$label: $value" },
+                Modifier.weight(1f).fillMaxSize().tourTarget(label.lowercase()).clip(RoundedCornerShape(17.dp)).clickable(onClick = go).semantics { contentDescription = "$label: $value" },
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
                 Ico(icon, C.TextHi, 18.dp)
@@ -930,7 +931,7 @@ fun CoverPager(st: PlayState, page: @Composable (Track, Boolean) -> Unit) {
         }
     }
     val gap = 16.dp
-    androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, pageSpacing = gap) { i ->
+    androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize().tourTarget("cover"), beyondViewportPageCount = 1, pageSpacing = gap) { i ->
         val song = queue.getOrNull(i) ?: return@HorizontalPager
         // o: 0 = in place, +1 = one page to the left (earlier song), -1 = one page to the right (next song).
         fun off() = ((pager.currentPage - i) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)

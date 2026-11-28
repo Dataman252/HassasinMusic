@@ -130,6 +130,13 @@ object Changelog {
     /** True while the What's new card is on screen. */
     @Volatile var showing = false
     val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.10" to listOf(
+            "A tour of the player for first-time users (Settings → About → Take the tour)",
+            "Best sound setup: tell it what you listen with, and the app sets itself up for the cleanest sound on your phone",
+            "New Audiophile section: signal purity check, Pure mode, resampler filters (Sharp, Steep, Soft, Minimum phase), bit depth, dither, headroom, limiter",
+            "Test tones: left/right, polarity, frequency sweep and noise floor",
+            "Plugging in a USB DAC offers to set the app up for it",
+        ),
         "0.9.4" to listOf("The player's colour moves with the swipe; Circle and Straight reveal sweep the whole player"),
         "0.9.3" to listOf(
             "Page turn: the cover turns like a notebook page, in the direction you swipe",
@@ -180,6 +187,8 @@ object Changelog {
         val seen = prefs.getString("seen", null)
         if (seen == now) return null
         prefs.edit().putString("seen", now).apply()
+        // A fresh install gets the tour instead of a list of changes.
+        if (seen == null && !AppState.settings.value.tourDone) return null
         if (seen == null && prefs.getBoolean("fresh_done", false).not()) {
             prefs.edit().putBoolean("fresh_done", true).apply()
             // First run of a version with this screen: show it too (it was an update for existing users).

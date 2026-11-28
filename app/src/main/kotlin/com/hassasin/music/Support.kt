@@ -102,8 +102,9 @@ fun DonatePrompt() {
         if (!asked && Donate.shouldAsk(context)) {
             kotlinx.coroutines.delay(8_000)
             // Never on top of the What's new card: wait until it is closed.
-            while (Changelog.showing) kotlinx.coroutines.delay(1_000)
+            while (Changelog.showing || Tour.active) kotlinx.coroutines.delay(1_000)
             kotlinx.coroutines.delay(3_000)
+            if (Tour.busyThisSession) return@LaunchedEffect
             asked = true
             Donate.showing = true
         }

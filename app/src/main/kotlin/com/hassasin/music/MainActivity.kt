@@ -103,6 +103,7 @@ sealed class Route {
     data object GeneratePlaylist : Route()
     data class AddSongs(val playlistId: Long) : Route()
     data class SettingsPage(val key: String) : Route()
+    data object QualitySetup : Route()
     data class PlaylistDetail(val id: Long) : Route()
     data class EditTags(val trackId: Long) : Route()
 }
@@ -269,6 +270,7 @@ class MainActivity : ComponentActivity() {
                                     is Route.SettingsPage -> SettingsPageScreen(nav, r.key)
                                     is Route.PlaylistDetail -> PlaylistScreen(nav, r.id)
                                     is Route.EditTags -> TagEditorScreen(nav, r.trackId)
+                                    Route.QualitySetup -> QualitySetupScreen(nav)
                                     else -> LibraryHub(nav)
                                 }
                             }
@@ -281,8 +283,10 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     SheetHost(nav)
-                    WhatsNew()
+                    WhatsNew(nav)
                     AddToPlaylistDialog()
+                    SetupNudge(nav)
+                    TourOverlay(nav)
                     VolumeHud(volumeShownAt)
                     DonatePrompt()
                 }
@@ -381,7 +385,7 @@ private fun VolumeHud(shownAt: Long) {
 
 /** Once after each update: what changed in this version. */
 @Composable
-private fun WhatsNew() {
+private fun WhatsNew(nav: Nav) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var notes by remember { mutableStateOf(Changelog.pending(context)) }
     androidx.compose.runtime.SideEffect { Changelog.showing = notes != null }
@@ -417,6 +421,10 @@ private fun WhatsNew() {
                 }
             }
             Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                Chip("Take the tour", false) { notes = null; nav.tab(Route.Player); Tour.start() }
+                Chip("Best sound setup", false) { notes = null; nav.go(Route.QualitySetup) }
+            }
             Box(Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(C.Amber).clickable { notes = null }, contentAlignment = Alignment.Center) {
                 Text("Got it", style = body(15.sp, FontWeight.Bold, C.OnAccent))
             }

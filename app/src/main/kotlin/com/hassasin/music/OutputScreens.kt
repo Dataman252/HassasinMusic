@@ -374,6 +374,7 @@ private val SECTIONS = listOf(
     SettingsSection("look", "Look", "Theme, visualizer, seek bar, cover", I.Image, listOf("Look", "Glow", "Soft", "Flow", "Theme", "Visualizer", "Seek bar", "Cover on song change", "Cover animation", "Cover sharpness")),
     SettingsSection("playback", "Playback", "Crossfade, ReplayGain, headphones", I.Play, listOf("Crossfade", "ReplayGain", "Loudness", "Resume with headphones", "Shortest song", "Gapless")),
     SettingsSection("sound", "Sound & output", "Output, DVC, resampler, EQ", I.Eq, listOf("Output", "USB DAC", "Bit-perfect", "Direct Volume Control", "DVC", "Volume", "App resampler", "Resampling", "Equalizer", "Effects", "Output chain", "Battery")),
+    SettingsSection("audio", "Audiophile", "Purity check, pure mode, resampler filter, dither, test tones", I.Plug, listOf("Audiophile", "Bit-perfect", "Purity", "Pure mode", "Best sound setup", "Setup", "Resampler filter", "Minimum phase", "Dither", "Bit depth", "Headroom", "Limiter", "Test tones", "Left and right", "Polarity", "Frequency sweep", "Noise floor")),
     SettingsSection("lyrics", "Lyrics & covers", "Online look-ups, Hinglish, album pictures", I.Lyrics, listOf("Lyrics online", "Hinglish", "Album art online", "Covers from Apple", "Album pictures", "Fix covers", "Wi-Fi only")),
     SettingsSection("library", "Library", "Folders, playlists, reading the library", I.Library, listOf("Music folders", "Hidden folders", "Read the library again", "Refresh", "Playlists")),
     SettingsSection("lock", "Lock screen & notification", "Lock screen player, notification card, widget", I.Clock, listOf("Lock screen player", "Notification player", "Second line", "Live lyrics", "Notification buttons", "Widget")),
@@ -439,7 +440,7 @@ fun SettingsScreen(nav: Nav) {
 }
 
 @Composable
-private fun ChoiceRow(title: String, options: List<Pair<String, String>>, selected: String, about: String? = null, pick: (String) -> Unit) {
+fun ChoiceRow(title: String, options: List<Pair<String, String>>, selected: String, about: String? = null, pick: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().raised().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, style = body(14.sp, FontWeight.Bold))
         @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -507,6 +508,8 @@ fun SettingsPageScreen(nav: Nav, key: String) {
                     item { Text("Speed, pitch and the sleep timer are in the player's ⋯ menu.", style = body(12.sp, color = C.TextLow), modifier = Modifier.padding(horizontal = 4.dp)) }
                 }
                 "sound" -> {
+                    item { SettingRow("Best sound setup", "Answer one question; the app sets itself up for the cleanest sound on this phone") { RoundButton(I.Plug, "Best sound setup", { nav.go(Route.QualitySetup) }, 40.dp) } }
+                    item { SettingRow("Audiophile", "Every quality control in one place, with a purity check and test tones") { RoundButton(I.Eq, "Audiophile", { nav.go(Route.SettingsPage("audio")) }, 40.dp) } }
                     item { SettingRow("Output", "How the sound leaves the phone, and the output chain") { RoundButton(I.Plug, "Output", { nav.go(Route.Sound(5)) }, 40.dp) } }
                     item { SettingRow("Equalizer & effects", "EQ, bass and tone, tuning, effects, earphone correction") { RoundButton(I.Eq, "Equalizer and effects", { nav.go(Route.Sound(0)) }, 40.dp) } }
                     item {
@@ -522,6 +525,7 @@ fun SettingsPageScreen(nav: Nav, key: String) {
                         }
                     }
                 }
+                "audio" -> audiophileItems(nav, s, ctx)
                 "lyrics" -> {
                     item { SettingRow("Find lyrics online", "From LRCLIB, when the file has none") { Toggle(s.autoLyrics, "Find lyrics online") { on -> AppState.update { it.copy(autoLyrics = on) } } } }
                     item { SettingRow("Hinglish", "Show lyrics in Indian scripts and Urdu in Roman letters") { Toggle(s.lyricsHinglish, "Hinglish") { on -> AppState.update { it.copy(lyricsHinglish = on) } } } }
@@ -549,6 +553,8 @@ fun SettingsPageScreen(nav: Nav, key: String) {
                 else -> {
                     item { UpdateRow() }
                     item { HelpImproveRow() }
+                    item { SettingRow("Take the tour", "A 30-second walk around the player") { RoundButton(I.Play, "Take the tour", { nav.tab(Route.Player); Tour.start() }, 40.dp) } }
+                    item { SettingRow("Best sound setup", "Set the app up for your headphones, DAC or speaker") { RoundButton(I.Plug, "Best sound setup", { nav.go(Route.QualitySetup) }, 40.dp) } }
                     item { SettingRow("What's new", "Changes in every version") { RoundButton(I.Star, "What's new", { nav.go(Route.Credits) }, 40.dp) } }
                     item { SettingRow("Share the app", "Send friends the download link") { RoundButton(I.Share, "Share the app", { ShareApp.share(ctx) }, 40.dp) } }
                     item { SettingRow("Support the developer", "A coffee by UPI keeps new versions coming") { RoundButton(I.Star, "Support the developer", { Donate.showing = true }, 40.dp) } }

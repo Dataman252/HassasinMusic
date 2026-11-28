@@ -70,7 +70,24 @@ data class AppSettings(
     val hiddenFolders: List<String> = listOf("WhatsApp", "Notifications", "Ringtones", "Alarms", "Recordings", "Call"),
     val shuffle: Boolean = false,
     val repeat: Int = 0, // 0 off, 1 all, 2 one
+    /** The first-run tour has been seen (or skipped). */
+    val tourDone: Boolean = false,
+    /** The best-quality setup has been run, and for which listening device. */
+    val setupDone: Boolean = false,
+    val setupDevice: String = "",
+    /** App resampler filter: "sharp" (48-tap linear phase), "steep" (128-tap), "soft" (24-tap, least ringing), "minphase" (no pre-ringing). */
+    val resamplerFilter: String = "sharp",
+    /** Dither when the app makes 16-bit: "tpdf" (flat), "shaped" (noise moved to where ears are least sensitive), "off". */
+    val dither: String = "tpdf",
+    /** What the app resampler hands to Android: "auto" (32-bit float where possible) or "16" (16-bit, dithered). */
+    val outDepth: String = "auto",
+    /** Pure mode: what was on before it, so turning it off brings it all back. Null = pure mode off. */
+    val pureBackup: PureBackup? = null,
 )
+
+/** Settings put aside while Pure mode is on. */
+@Serializable
+data class PureBackup(val sound: SoundSettings, val crossfadeSec: Int, val replayGain: String, val speed: Float)
 
 @Serializable
 data class TrackStat(val plays: Int = 0, val lastPlayed: Long = 0, val rating: Int = 0, /** Seconds really listened, all plays together. */ val listenedSec: Long = 0)

@@ -72,7 +72,7 @@ object OutputChain {
             if (effects) add("EQ / effects (64-bit)")
             if (Dvc.on() && Dvc.step() < Dvc.STEPS) add("volume ${Dvc.label()} (64-bit)")
             val mix = AudioPathInfo.mixerRate(context)
-            if (s.appResampler && !st.usb && !st.phoneDirect && s.output != "offload" && t.sampleRate > 0 && mix > 0 && t.sampleRate != mix) add("resampled ${khz(t.sampleRate)} → ${khz(mix)} kHz (app's 48-tap sinc)")
+            if (s.appResampler && !st.usb && !st.phoneDirect && s.output != "offload" && t.sampleRate > 0 && mix > 0 && t.sampleRate != mix) add("resampled ${khz(t.sampleRate)} → ${khz(mix)} kHz (app's ${AppResampler.label(s.resamplerFilter)}${if (s.outDepth == "16") ", 16-bit ${if (s.dither == "off") "no dither" else if (s.dither == "shaped") "shaped dither" else "dithered"}" else ""})")
             if (s.speed != 1f && !st.usb && !st.phoneDirect) add("speed ${s.speed}×")
             if (s.replayGain != "off") ReplayGain.describe(t).takeIf { it.isNotBlank() }?.let { add("ReplayGain $it") }
         }

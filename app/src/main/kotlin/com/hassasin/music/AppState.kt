@@ -195,7 +195,10 @@ object AppState {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        // People updating from before the tour existed are not shown it unasked (What's new offers it).
+        val existing = runCatching { Store.file("settings.json").takeIf { it.exists() }?.readText() }.getOrNull()
         _settings.value = Store.load("settings.json", AppSettings()).let { if (it.output == "android") it.copy(output = "tuned") else it }
+            .let { if (existing != null && !existing.contains("tourDone")) it.copy(tourDone = true) else it }
         SoundState.set(_settings.value.sound)
         _stats.value = Store.load<Map<Long, TrackStat>>("stats.json", emptyMap())
     }
